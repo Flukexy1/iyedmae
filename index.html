@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ถึงเวฟ...</title>
+  <style>
+    body {
+      background: linear-gradient(to top right, #fff0f5, #fbeaff);
+      font-family: 'Sarabun', sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      color: #cc3399;
+      text-align: center;
+    }
+
+    .message {
+      font-size: 1.8em;
+      max-width: 90%;
+      margin-bottom: 30px;
+      min-height: 3em;
+    }
+
+    .btn {
+      background-color: #cc3399;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 1.2em;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .btn:hover {
+      background-color: #b32d85;
+    }
+
+    .heart {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background-color: #ff66aa;
+      transform: rotate(45deg);
+      animation: float 6s infinite ease-in-out;
+    }
+
+    .heart::before,
+    .heart::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background-color: #ff66aa;
+      border-radius: 50%;
+    }
+
+    .heart::before {
+      top: -10px;
+      left: 0;
+    }
+
+    .heart::after {
+      left: -10px;
+      top: 0;
+    }
+
+    @keyframes float {
+      0% {
+        transform: translateY(0) rotate(45deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(-100vh) rotate(45deg);
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="message" id="text">กดปุ่มสิ เวฟ :)</div>
+  <button class="btn" onclick="nextLine()">👉 กดตรงนี้ 👈</button>
+
+  <script>
+    const lines = [
+      "เฮ้ เวฟ",
+      "เรามีอะไรจะบอก...",
+      "ไม่ต้องตกใจนะ",
+      "คือแบบว่า...",
+      "เวฟน่ารักมากเลยอะ",
+      "แค่เห็นชื่อเวฟก็ยิ้มแล้ว",
+      "บางทีแม่งก็คิดในใจอยู่ตลอดว่า",
+      "รักนะ (แล้วก็แบบ…ขอเย็ดหน่อยได้ปะ 555 หยอกก",
+      "ไม่ต้องตอบก็ได้ :)",
+      "แค่อยากให้รู้ไว้เท่านั้นเอง"
+    ];
+
+    let index = 0;
+
+    function nextLine() {
+      const textEl = document.getElementById('text');
+      if (index < lines.length) {
+        textEl.textContent = lines[index];
+        index++;
+      } else {
+        textEl.textContent = "หมดละแค่นี้แหละ :)";
+      }
+    }
+
+    // หัวใจลอย
+    setInterval(() => {
+      const heart = document.createElement('div');
+      heart.classList.add('heart');
+      heart.style.left = Math.random() * 100 + 'vw';
+      heart.style.animationDuration = (Math.random() * 3 + 3) + 's';
+      document.body.appendChild(heart);
+
+      setTimeout(() => {
+        heart.remove();
+      }, 6000);
+    }, 300);
+  </script>
+
+</body>
+</html>
