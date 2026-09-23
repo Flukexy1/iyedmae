@@ -474,17 +474,6 @@
 
     /* Global Variables and Config */
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'camvault-prod';
-    const firebaseConfig = typeof __firebase_config !== 'undefined' 
-      ? JSON.parse(__firebase_config) 
-      : {
-          apiKey: "AIzaSyDummyKey_For_Local_Dev",
-          authDomain: "camvault.firebaseapp.com",
-          projectId: "camvault-app",
-          storageBucket: "camvault.appspot.com",
-          messagingSenderId: "1234567890",
-          appId: "1:1234567890:web:camvaultdummy"
-        };
-// --- Firebase Configuration ---
     const firebaseConfig = {
       apiKey: "AIzaSyB2MxyQRN-wCWvS-xxmvpAygU-6jstnzxY",
       authDomain: "cumming-674ca.firebaseapp.com",
@@ -495,6 +484,7 @@
       appId: "1:612384158913:web:c55aa85841ee7aadcc5040",
       measurementId: "G-3VQ6XSVYBE"
     };
+
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
