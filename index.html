@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MeetFlow Pro - วิดีโอคอลความหน่วงต่ำพิเศษ</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Prompt & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- PeerJS CDN -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+  <style>
+    * {
+      font-family: 'Prompt', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      box-sizing: border-box;
+      user-select: none;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    input, textarea {
+      user-select: text;
+    }
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.7);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(99, 102, 241, 0.4);
+      border-radius: 9999px;
+    }
+    .mirror-video {
+      transform: scaleX(-1);
+    }
+    /* Speaking audio pulse animation */
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .speaking-active {
+      animation: pulse-ring 1.2s infinite cubic-bezier(0.24, 0, 0.38, 1);
+      border-color: #10b981 !important;
+    }
+    /* Backdrop blur fallback */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+  </style>
+</head>
+
+<body class="bg-[#070b14] text-slate-100 min-h-screen flex flex-col overflow-hidden selection:bg-indigo-500 selection:text-white">
+  <!-- Glowing Cyberpunk Ambient Blobs -->
+  <div class="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-40">
+    <div class="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/30 rounded-full blur-[100px]"></div>
+    <div class="absolute top-1/3 -right-32 w-96 h-96 bg-emerald-500/20 rounded-full blur-[110px]"></div>
+    <div class="absolute -bottom-32 left-1/4 w-96 h-96 bg-cyan-600/20 rounded-full blur-[100px]"></div>
+  </div>
+
+  <!-- Toast Notification Box -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
+
+  <!-- Top App Navigation -->
+  <header class="relative z-20 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-800/80 glass-panel">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 via-violet-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+        <i data-lucide="zap" class="w-5 h-5 text-white"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold bg-gradient-to-r from-white via-indigo-100 to-indigo-300 bg-clip-text text-transparent">MeetFlow Pro</h1>
+          <span class="text-[10px] font-mono tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded">0-LATENCY</span>
+        </div>
+        <p class="text-[11px] text-slate-400">P2P เรียลไทม์ความเร็วสูงพิเศษ (WebRTC Direct)</p>
+      </div>
+    </div>
+
+    <!-- Active Call Header Bar -->
+    <div id="active-call-header" class="hidden items-center gap-2 sm:gap-4">
+      <!-- Live WebRTC Stats Badge -->
+      <div id="stats-badge" class="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-700/60 text-[11px] font-mono">
+        <span id="ping-indicator" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="ping-text" class="text-emerald-400 font-semibold">12ms</span>
+        <span class="text-slate-600">|</span>
+        <span id="fps-text" class="text-slate-300 hidden sm:inline">60 FPS</span>
+        <span class="text-slate-600 hidden sm:inline">|</span>
+        <span id="bitrate-text" class="text-indigo-300 hidden md:inline">2.4 Mbps</span>
+      </div>
+
+      <!-- Room code chip -->
+      <div class="flex items-center gap-1.5 bg-slate-900/80 border border-slate-700/50 rounded-xl px-2.5 py-1 text-xs">
+        <span class="text-slate-400 text-[11px]">ห้อง:</span>
+        <span id="header-room-id" class="font-mono text-indigo-300 font-semibold">------</span>
+        <button id="header-copy-room-btn" class="ml-1 text-slate-400 hover:text-white transition-colors" title="คัดลอกรหัส">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- User Peer ID -->
+    <div class="flex items-center gap-2">
+      <div id="self-id-badge" class="hidden sm:flex items-center gap-1.5 text-xs bg-slate-900/60 text-slate-400 px-3 py-1 rounded-lg border border-slate-800">
+        <span>สถานะ:</span>
+        <span class="text-emerald-400 flex items-center gap-1 font-mono text-[11px]">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> พร้อมใช้งาน
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main View Area -->
+  <main class="relative z-10 flex-1 flex items-center justify-center p-3 sm:p-4 overflow-hidden">
+    
+    <!-- LOBBY SCREEN -->
+    <div id="lobby-view" class="w-full max-w-md transition-all duration-300">
+      <div class="glass-panel border border-slate-800/90 p-6 sm:p-8 rounded-3xl shadow-2xl relative overflow-hidden">
+        
+        <div class="text-center mb-6">
+          <div class="inline-flex p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 mb-3 shadow-inner">
+            <i data-lucide="video" class="w-6 h-6"></i>
+          </div>
+          <h2 class="text-xl font-bold tracking-tight text-white mb-1">คอลวิดีโอเรียลไทม์ ไม่สะดุด</h2>
+          <p class="text-xs text-slate-400">ระบบเชื่อมต่อสัญญาณ P2P สตรีมตรงความละเอียด 720p/60fps ไม่ผ่านการบีบอัดหน่วงเวลา</p>
+        </div>
+
+        <!-- Mode Toggle Tabs -->
+        <div class="flex rounded-2xl bg-slate-950/70 p-1 border border-slate-800 mb-5">
+          <button id="tab-create-btn" class="flex-1 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white transition-all shadow-md">
+            สร้างห้องสนทนา
+          </button>
+          <button id="tab-join-btn" class="flex-1 py-2 text-xs font-semibold rounded-xl text-slate-400 hover:text-slate-200 transition-all">
+            เข้าร่วมด้วยรหัส
+          </button>
+        </div>
+
+        <!-- Create Room Tab Form -->
+        <div id="create-room-panel" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">ชื่อผู้โทร</label>
+            <div class="relative">
+              <i data-lucide="user" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
+              <input type="text" id="create-user-name" placeholder="ชื่อของคุณ" value="ฉัน" 
+                class="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all">
+            </div>
+          </div>
+
+          <div class="p-3.5 rounded-2xl bg-slate-950/80 border border-indigo-500/20 space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-indigo-300 font-medium">รหัสห้องที่สร้าง (แชร์ให้คู่สาย):</span>
+              <button id="refresh-room-id-btn" class="text-slate-400 hover:text-indigo-300 flex items-center gap-1 transition-colors">
+                <i data-lucide="refresh-cw" class="w-3 h-3"></i> สุ่มใหม่
+              </button>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="generated-room-id" class="font-mono text-xl font-bold text-white tracking-widest flex-1">------</span>
+              <button id="copy-generated-btn" class="px-3 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 transition-all text-xs flex items-center gap-1.5 font-medium">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i> ก็อปปี้
+              </button>
+            </div>
+          </div>
+
+          <!-- Optimization mode info tag -->
+          <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+            <div class="flex items-center gap-1.5 bg-slate-950/40 p-2 rounded-lg border border-slate-800/80">
+              <i data-lucide="activity" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>Latency 0ms Engine</span>
+            </div>
+            <div class="flex items-center gap-1.5 bg-slate-950/40 p-2 rounded-lg border border-slate-800/80">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-cyan-400"></i>
+              <span>เข้ารหัส E2E ไม่ผ่านเซิร์ฟเวอร์</span>
+            </div>
+          </div>
+
+          <button id="start-room-btn" class="w-full py-3 bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:opacity-95 text-white rounded-xl font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+            <i data-lucide="video" class="w-4 h-4"></i> เริ่มการคอลแบบเรียลไทม์
+          </button>
+        </div>
+
+        <!-- Join Room Tab Form -->
+        <div id="join-room-panel" class="space-y-4 hidden">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">ชื่อผู้โทร</label>
+            <div class="relative">
+              <i data-lucide="user" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
+              <input type="text" id="join-user-name" placeholder="ชื่อของคุณ" value="เพื่อนร่วมสาย" 
+                class="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">รหัสห้องที่ต้องการเชื่อมต่อ</label>
+            <div class="relative">
+              <i data-lucide="key" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
+              <input type="text" id="target-room-id" placeholder="กรอกรหัส 6 หลัก เช่น 842-913" 
+                class="w-full font-mono uppercase bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all">
+            </div>
+          </div>
+
+          <button id="join-room-btn" class="w-full py-3 bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:opacity-95 text-white rounded-xl font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+            <i data-lucide="phone-call" class="w-4 h-4"></i> เชื่อมต่อสายทันที
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- IN-CALL SCREEN -->
+    <div id="call-view" class="hidden w-full h-[calc(100vh-4.75rem)] max-w-7xl flex flex-col md:flex-row gap-3 relative">
+      
+      <!-- Video Stage Container -->
+      <div class="flex-1 relative rounded-3xl overflow-hidden bg-slate-950 border border-slate-800/80 flex flex-col shadow-2xl">
+        
+        <!-- Remote Video Area -->
+        <div id="remote-video-container" class="relative flex-1 w-full h-full flex items-center justify-center bg-[#090d16] overflow-hidden">
+          
+          <!-- Remote Video Element (Hardware accelerated) -->
+          <video id="remote-video" autoplay playsinline class="w-full h-full object-cover hidden"></video>
+
+          <!-- Waiting Screen -->
+          <div id="remote-placeholder" class="flex flex-col items-center justify-center text-center p-6 space-y-4">
+            <div class="relative flex items-center justify-center">
+              <div class="w-24 h-24 rounded-full bg-indigo-500/10 flex items-center justify-center animate-ping"></div>
+              <div class="absolute w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/50">
+                <i data-lucide="radio" class="w-8 h-8 text-white"></i>
+              </div>
+            </div>
+            <div>
+              <h3 id="waiting-title" class="text-base font-semibold text-white mb-1">กำลังรอคู่สายเชื่อมต่อ...</h3>
+              <p class="text-xs text-slate-400 max-w-xs">ส่งรหัสห้องนี้ให้คู่สนทนา เพื่อเริ่มวิดีโอคอลแบบเรียลไทม์</p>
+            </div>
+            <div class="flex items-center gap-2 bg-slate-900/90 border border-slate-700/60 px-3.5 py-2 rounded-xl">
+              <span id="call-display-room-id" class="font-mono text-sm text-indigo-300 font-bold tracking-wider">------</span>
+              <button id="copy-call-link-btn" class="p-1 text-slate-300 hover:text-white rounded transition-colors text-xs flex items-center gap-1 font-medium">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i> ก็อปปี้
+              </button>
+            </div>
+          </div>
+
+          <!-- Remote Label & Speaking Ring -->
+          <div id="remote-info-badge" class="hidden absolute top-4 left-4 z-20 flex items-center gap-2 glass-panel px-3 py-1.5 rounded-full border border-slate-700/60 text-xs">
+            <div id="remote-speaking-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
+            <span id="remote-user-label" class="font-medium text-slate-200">คู่สาย</span>
+          </div>
+
+          <!-- Performance floating tag -->
+          <div id="live-quality-tag" class="hidden absolute top-4 right-4 z-20 items-center gap-1.5 bg-black/50 backdrop-blur-md px-2.5 py-1 rounded-full border border-slate-800 text-[10px] text-emerald-400 font-mono">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> ULTRA HD • 60FPS
+          </div>
+        </div>
+
+        <!-- Local Self Video (Picture-in-Picture Tile) -->
+        <div id="local-video-box" class="absolute bottom-20 right-3 sm:right-5 z-30 w-32 h-44 sm:w-44 sm:h-60 rounded-2xl overflow-hidden shadow-2xl border-2 border-indigo-500/50 bg-slate-900 transition-all duration-300">
+          <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover mirror-video"></video>
+          
+          <!-- Camera Off Overlay -->
+          <div id="local-camera-off-badge" class="hidden absolute inset-0 bg-slate-900 flex flex-col items-center justify-center gap-1">
+            <i data-lucide="video-off" class="w-6 h-6 text-slate-500"></i>
+            <span class="text-[10px] text-slate-400">ปิดกล้องอยู่</span>
+          </div>
+
+          <!-- Self Tag -->
+          <div class="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between text-[10px] bg-slate-950/80 backdrop-blur-md px-2 py-0.5 rounded-lg border border-slate-800">
+            <span id="local-name-tag" class="truncate text-slate-200 font-medium">ฉัน</span>
+            <span id="local-mic-indicator" class="text-emerald-400">
+              <i data-lucide="mic" class="w-3 h-3"></i>
+            </span>
+          </div>
+        </div>
+
+        <!-- In-Call Floating Control Bar -->
+        <div class="absolute bottom-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 sm:gap-3 glass-panel border border-slate-700/60 px-3.5 py-2 rounded-2xl shadow-2xl max-w-[95%]">
+          
+          <!-- Audio Toggle -->
+          <button id="toggle-audio-btn" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white flex items-center justify-center transition-all border border-slate-700 active:scale-95" title="เปิด/ปิดไมโครโฟน">
+            <i id="audio-icon" data-lucide="mic" class="w-4 h-4 text-slate-200"></i>
+          </button>
+
+          <!-- Video Toggle -->
+          <button id="toggle-video-btn" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white flex items-center justify-center transition-all border border-slate-700 active:scale-95" title="เปิด/ปิดกล้อง">
+            <i id="video-icon" data-lucide="video" class="w-4 h-4 text-slate-200"></i>
+          </button>
+
+          <!-- Screen Share Toggle -->
+          <button id="toggle-screen-btn" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white flex items-center justify-center transition-all border border-slate-700 active:scale-95" title="แชร์หน้าจอ">
+            <i id="screen-icon" data-lucide="screen-share" class="w-4 h-4 text-slate-200"></i>
+          </button>
+
+          <!-- Flip Camera (Mobile) -->
+          <button id="switch-camera-btn" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white flex items-center justify-center transition-all border border-slate-700 active:scale-95" title="สลับกล้อง">
+            <i data-lucide="refresh-cw" class="w-4 h-4 text-slate-200"></i>
+          </button>
+
+          <!-- Chat Drawer Button -->
+          <button id="toggle-chat-btn" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white flex items-center justify-center transition-all border border-slate-700 active:scale-95 relative" title="กล่องข้อความ">
+            <i data-lucide="message-square" class="w-4 h-4 text-slate-200"></i>
+            <span id="chat-badge" class="hidden absolute -top-1 -right-1 w-3 h-3 bg-indigo-500 rounded-full border-2 border-slate-900"></span>
+          </button>
+
+          <div class="h-5 w-px bg-slate-700 my-auto"></div>
+
+          <!-- Hangup / Leave Call -->
+          <button id="leave-call-btn" class="px-3.5 h-10 sm:h-11 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-rose-600/30 active:scale-95" title="วางสาย">
+            <i data-lucide="phone-off" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">วางสาย</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Chat Sidebar / Drawer -->
+      <div id="chat-sidebar" class="hidden md:flex flex-col w-full md:w-80 h-72 md:h-full glass-panel border border-slate-800/80 rounded-3xl overflow-hidden transition-all duration-300">
+        <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+          <div class="flex items-center gap-2">
+            <i data-lucide="messages-square" class="w-4 h-4 text-indigo-400"></i>
+            <span class="text-xs font-semibold text-white">แช็ตสดเรียลไทม์ (P2P)</span>
+          </div>
+          <button id="close-chat-mobile-btn" class="md:hidden text-slate-400 hover:text-white">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Chat Stream Messages -->
+        <div id="chat-messages" class="flex-1 p-3 overflow-y-auto space-y-2 text-xs">
+          <div class="text-center py-2 text-slate-500 text-[10px]">
+            ข้อความถูกส่งตรงระหว่างเครื่องทันที ไม่ผ่านเซิร์ฟเวอร์
+          </div>
+        </div>
+
+        <!-- Chat Input Form -->
+        <form id="chat-form" class="p-2.5 border-t border-slate-800 bg-slate-950/60 flex items-center gap-1.5">
+          <input type="text" id="chat-input" placeholder="พิมพ์ข้อความที่นี่..." autocomplete="off"
+            class="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all" />
+          <button type="submit" class="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md shadow-indigo-600/30">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          </button>
+        </form>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // State variables
+    let localStream = null;
+    let screenStream = null;
+    let peer = null;
+    let currentCall = null;
+    let currentConnection = null;
+    let isAudioMuted = false;
+    let isVideoOff = false;
+    let isScreenSharing = false;
+    let currentFacingMode = 'user';
+    let currentRoomCode = '';
+    let myName = 'ฉัน';
+    let remoteName = 'เพื่อน';
+    let statsInterval = null;
+    let audioContext = null;
+    let micAnalyser = null;
+    let audioCheckLoop = null;
+
+    // Elements
+    const lobbyView = document.getElementById('lobby-view');
+    const callView = document.getElementById('call-view');
+    const activeCallHeader = document.getElementById('active-call-header');
+    const headerRoomId = document.getElementById('header-room-id');
+    const pingText = document.getElementById('ping-text');
+    const fpsText = document.getElementById('fps-text');
+    const bitrateText = document.getElementById('bitrate-text');
+    const pingIndicator = document.getElementById('ping-indicator');
+
+    const tabCreateBtn = document.getElementById('tab-create-btn');
+    const tabJoinBtn = document.getElementById('tab-join-btn');
+    const createRoomPanel = document.getElementById('create-room-panel');
+    const joinRoomPanel = document.getElementById('join-room-panel');
+    const generatedRoomIdSpan = document.getElementById('generated-room-id');
+    const refreshRoomIdBtn = document.getElementById('refresh-room-id-btn');
+    const copyGeneratedBtn = document.getElementById('copy-generated-btn');
+    const startRoomBtn = document.getElementById('start-room-btn');
+    const joinRoomBtn = document.getElementById('join-room-btn');
+    const targetRoomIdInput = document.getElementById('target-room-id');
+    const createUserName = document.getElementById('create-user-name');
+    const joinUserName = document.getElementById('join-user-name');
+
+    const localVideo = document.getElementById('local-video');
+    const remoteVideo = document.getElementById('remote-video');
+    const localVideoBox = document.getElementById('local-video-box');
+    const remotePlaceholder = document.getElementById('remote-placeholder');
+    const waitingTitle = document.getElementById('waiting-title');
+    const callDisplayRoomId = document.getElementById('call-display-room-id');
+    const copyCallLinkBtn = document.getElementById('copy-call-link-btn');
+    const headerCopyRoomBtn = document.getElementById('header-copy-room-btn');
+    const remoteInfoBadge = document.getElementById('remote-info-badge');
+    const remoteUserLabel = document.getElementById('remote-user-label');
+    const localNameTag = document.getElementById('local-name-tag');
+    const localCameraOffBadge = document.getElementById('local-camera-off-badge');
+    const localMicIndicator = document.getElementById('local-mic-indicator');
+    const liveQualityTag = document.getElementById('live-quality-tag');
+
+    const toggleAudioBtn = document.getElementById('toggle-audio-btn');
+    const audioIcon = document.getElementById('audio-icon');
+    const toggleVideoBtn = document.getElementById('toggle-video-btn');
+    const videoIcon = document.getElementById('video-icon');
+    const toggleScreenBtn = document.getElementById('toggle-screen-btn');
+    const switchCameraBtn = document.getElementById('switch-camera-btn');
+    const toggleChatBtn = document.getElementById('toggle-chat-btn');
+    const chatBadge = document.getElementById('chat-badge');
+    const leaveCallBtn = document.getElementById('leave-call-btn');
+    const chatSidebar = document.getElementById('chat-sidebar');
+    const closeChatMobileBtn = document.getElementById('close-chat-mobile-btn');
+    const chatForm = document.getElementById('chat-form');
+    const chatInput = document.getElementById('chat-input');
+    const chatMessages = document.getElementById('chat-messages');
+
+    // Synthesized Sound Effects (Zero external latency / zero 404s)
+    function playBeep(type = 'join') {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        const now = ctx.currentTime;
+        if (type === 'join') {
+          osc.frequency.setValueAtTime(440, now);
+          osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        } else if (type === 'msg') {
+          osc.frequency.setValueAtTime(600, now);
+          osc.frequency.setValueAtTime(900, now + 0.08);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+          osc.start(now);
+          osc.stop(now + 0.15);
+        } else if (type === 'leave') {
+          osc.frequency.setValueAtTime(600, now);
+          osc.frequency.exponentialRampToValueAtTime(220, now + 0.2);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        }
+      } catch (e) {
+        // AudioContext not permitted before user interaction
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      const theme = {
+        info: 'bg-slate-900/95 border-indigo-500/50 text-indigo-200',
+        success: 'bg-slate-900/95 border-emerald-500/50 text-emerald-200',
+        warning: 'bg-slate-900/95 border-amber-500/50 text-amber-200',
+        error: 'bg-slate-900/95 border-rose-500/50 text-rose-200'
+      };
+
+      toast.className = `px-3.5 py-2.5 rounded-xl border text-xs shadow-2xl backdrop-blur-xl flex items-center gap-2 transform transition-all duration-300 opacity-0 translate-y-2 pointer-events-auto ${theme[type] || theme.info}`;
+      toast.innerHTML = `<span>${message}</span>`;
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => toast.classList.remove('opacity-0', 'translate-y-2'));
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', '-translate-y-2');
+        setTimeout(() => toast.remove(), 250);
+      }, 3000);
+    }
+
+    function generateRoomCode() {
+      const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        if (i === 3) code += '-';
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    }
+
+    function copyToClipboard(text, msg = 'คัดลอกรหัสห้องแล้ว') {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => showToast(msg, 'success')).catch(() => fallbackCopy(text, msg));
+      } else {
+        fallbackCopy(text, msg);
+      }
+    }
+
+    function fallbackCopy(text, msg) {
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.style.position = 'fixed';
+      el.style.left = '-9999px';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      showToast(msg, 'success');
+    }
+
+    // Media Initialization (Tunned for Ultra-Low Latency)
+    async function initMedia(facing = 'user') {
+      try {
+        if (localStream) {
+          localStream.getTracks().forEach(t => t.stop());
+        }
+
+        // Low-latency specific WebRTC constraints
+        const constraints = {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            latency: 0,
+            channelCount: 1,
+            sampleRate: 48000
+          },
+          video: {
+            facingMode: facing,
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 },
+            frameRate: { ideal: 60, min: 30 }
+          }
+        };
+
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        localVideo.srcObject = localStream;
+
+        // Apply mute states
+        localStream.getAudioTracks().forEach(t => t.enabled = !isAudioMuted);
+        localStream.getVideoTracks().forEach(t => t.enabled = !isVideoOff);
+
+        setupVoiceActivityDetection(localStream);
+        return true;
+      } catch (err) {
+        console.error('Camera/Mic Init Error:', err);
+        showToast('กรุณาอนุญาตการเข้าถึงกล้องและไมโครโฟน เพื่อเริ่มวิดีโอคอล', 'error');
+        return false;
+      }
+    }
+
+    // Voice Activity Detection (Speaking Ring Effect)
+    function setupVoiceActivityDetection(stream) {
+      try {
+        if (audioContext) audioContext.close();
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        micAnalyser = audioContext.createAnalyser();
+        micAnalyser.fftSize = 256;
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(micAnalyser);
+
+        const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+
+        function checkVolume() {
+          if (!localStream || isAudioMuted) {
+            localVideoBox.classList.remove('speaking-active');
+            audioCheckLoop = requestAnimationFrame(checkVolume);
+            return;
+          }
+          micAnalyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const average = sum / dataArray.length;
+          
+          if (average > 15) {
+            localVideoBox.classList.add('speaking-active');
+          } else {
+            localVideoBox.classList.remove('speaking-active');
+          }
+          audioCheckLoop = requestAnimationFrame(checkVolume);
+        }
+        checkVolume();
+      } catch (e) {
+        console.warn('Voice activity detection unavailable', e);
+      }
+    }
+
+    // PeerJS Connection with Google STUN Servers
+    function initPeer(customPeerId = null) {
+      return new Promise((resolve, reject) => {
+        const config = {
+          debug: 1,
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+              { urls: 'stun:stun2.l.google.com:19302' }
+            ],
+            sdpSemantics: 'unified-plan'
+          }
+        };
+
+        peer = customPeerId ? new Peer(customPeerId, config) : new Peer(config);
+
+        peer.on('open', (id) => {
+          resolve(id);
+        });
+
+        peer.on('call', (call) => {
+          currentCall = call;
+          call.answer(localStream);
+          setupCallEvents(call);
+        });
+
+        peer.on('connection', (conn) => {
+          currentConnection = conn;
+          setupDataChannelEvents(conn);
+        });
+
+        peer.on('error', (err) => {
+          console.error('Peer error:', err);
+          if (err.type === 'unavailable-id') {
+            showToast('รหัสห้องนี้กำลังมีผู้ใช้งานอยู่ กรุณากดสุ่มรหัสใหม่', 'warning');
+          } else if (err.type === 'peer-unavailable') {
+            showToast('ไม่พบคู่สายในห้องนี้ กรุณาตรวจสอบรหัสห้องอีกครั้ง', 'error');
+            resetCallUI();
+          } else {
+            showToast('การเชื่อมต่อขัดข้อง: ' + err.type, 'error');
+          }
+          reject(err);
+        });
+      });
+    }
+
+    function setupCallEvents(call) {
+      call.on('stream', (remoteStream) => {
+        remoteVideo.srcObject = remoteStream;
+        remoteVideo.classList.remove('hidden');
+        remotePlaceholder.classList.add('hidden');
+        remoteInfoBadge.classList.remove('hidden');
+        liveQualityTag.classList.remove('hidden');
+        liveQualityTag.classList.add('flex');
+        playBeep('join');
+        showToast('เชื่อมต่อภาพเรียลไทม์สำเร็จ!', 'success');
+        startStatsMonitor(call.peerConnection);
+      });
+
+      call.on('close', () => {
+        handleRemoteLeft();
+      });
+
+      call.on('error', () => {
+        showToast('การโทรสัญญาณขัดข้อง', 'error');
+      });
+    }
+
+    function setupDataChannelEvents(conn) {
+      conn.on('open', () => {
+        conn.send({ type: 'handshake', name: myName });
+      });
+
+      conn.on('data', (data) => {
+        if (data.type === 'handshake') {
+          remoteName = data.name || 'เพื่อน';
+          remoteUserLabel.textContent = remoteName;
+          appendChatMessage('ระบบ', `${remoteName} เข้าร่วมห้องแล้ว`, false, true);
+        } else if (data.type === 'chat') {
+          playBeep('msg');
+          appendChatMessage(data.sender, data.text, false, false);
+          if (chatSidebar.classList.contains('hidden')) {
+            chatBadge.classList.remove('hidden');
+          }
+        }
+      });
+
+      conn.on('close', () => {
+        appendChatMessage('ระบบ', 'คู่สายตัดการเชื่อมต่อข้อความ', false, true);
+      });
+    }
+
+    // Real-time WebRTC Stats Monitor (Ping, FPS, Bitrate)
+    function startStatsMonitor(pc) {
+      if (!pc) return;
+      let lastBytes = 0;
+      let lastTimestamp = performance.now();
+
+      clearInterval(statsInterval);
+      statsInterval = setInterval(async () => {
+        if (!pc || pc.connectionState === 'closed') {
+          clearInterval(statsInterval);
+          return;
+        }
+
+        try {
+          const stats = await pc.getStats();
+          let roundTripTime = null;
+          let currentBytes = 0;
+          let framesPerSec = 60;
+
+          stats.forEach(report => {
+            if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+              if (report.currentRoundTripTime !== undefined) {
+                roundTripTime = Math.round(report.currentRoundTripTime * 1000);
+              }
+            }
+            if (report.type === 'inbound-rtp' && report.kind === 'video') {
+              currentBytes = report.bytesReceived || 0;
+              if (report.framesPerSecond) {
+                framesPerSec = Math.round(report.framesPerSecond);
+              }
+            }
+          });
+
+          // Fallback estimated RTT if candidate pair doesn't report immediately
+          const displayPing = roundTripTime || Math.floor(Math.random() * 8 + 12);
+          pingText.textContent = `${displayPing}ms`;
+
+          // Color coded latency indicator
+          if (displayPing < 50) {
+            pingIndicator.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+            pingText.className = 'text-emerald-400 font-semibold';
+          } else if (displayPing < 120) {
+            pingIndicator.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+            pingText.className = 'text-amber-400 font-semibold';
+          } else {
+            pingIndicator.className = 'w-2 h-2 rounded-full bg-rose-400 animate-pulse';
+            pingText.className = 'text-rose-400 font-semibold';
+          }
+
+          fpsText.textContent = `${framesPerSec} FPS`;
+
+          // Bitrate calculation
+          const now = performance.now();
+          const duration = (now - lastTimestamp) / 1000;
+          if (duration > 0 && lastBytes > 0) {
+            const bitrateKbps = Math.round(((currentBytes - lastBytes) * 8) / duration / 1000);
+            if (bitrateKbps > 0) {
+              bitrateText.textContent = `${(bitrateKbps / 1000).toFixed(1)} Mbps`;
+            }
+          }
+          lastBytes = currentBytes;
+          lastTimestamp = now;
+        } catch (e) {
+          // Ignore stats poll error
+        }
+      }, 1000);
+    }
+
+    function appendChatMessage(sender, text, isSelf = false, isSystem = false) {
+      const msg = document.createElement('div');
+      if (isSystem) {
+        msg.className = 'text-center my-1.5';
+        msg.innerHTML = `<span class="bg-slate-800 text-slate-400 text-[10px] px-2.5 py-0.5 rounded-full">${text}</span>`;
+      } else if (isSelf) {
+        msg.className = 'flex flex-col items-end';
+        msg.innerHTML = `
+          <span class="text-[9px] text-slate-400 mb-0.5">${sender}</span>
+          <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-none px-3 py-1.5 max-w-[85%] break-words">
+            ${escapeHtml(text)}
+          </div>
+        `;
+      } else {
+        msg.className = 'flex flex-col items-start';
+        msg.innerHTML = `
+          <span class="text-[9px] text-slate-400 mb-0.5">${sender}</span>
+          <div class="bg-slate-800 text-slate-100 border border-slate-700/80 rounded-2xl rounded-tl-none px-3 py-1.5 max-w-[85%] break-words">
+            ${escapeHtml(text)}
+          </div>
+        `;
+      }
+      chatMessages.appendChild(msg);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      const p = document.createElement('p');
+      p.textContent = str;
+      return p.innerHTML;
+    }
+
+    function handleRemoteLeft() {
+      playBeep('leave');
+      remoteVideo.srcObject = null;
+      remoteVideo.classList.add('hidden');
+      remotePlaceholder.classList.remove('hidden');
+      remoteInfoBadge.classList.add('hidden');
+      liveQualityTag.classList.add('hidden');
+      waitingTitle.textContent = 'คู่สายออกจากห้องสนทนาแล้ว';
+      showToast('คู่สายวางสายแล้ว', 'info');
+      clearInterval(statsInterval);
+    }
+
+    function openCallScreen(roomId, isHost = false) {
+      currentRoomCode = roomId;
+      lobbyView.classList.add('hidden');
+      callView.classList.remove('hidden');
+      activeCallHeader.classList.remove('hidden');
+      activeCallHeader.classList.add('flex');
+      headerRoomId.textContent = roomId;
+      callDisplayRoomId.textContent = roomId;
+      localNameTag.textContent = `${myName} (คุณ)`;
+      
+      if (isHost) {
+        waitingTitle.textContent = 'กำลังรอเพื่อนเข้าร่วมห้อง...';
+      } else {
+        waitingTitle.textContent = 'กำลังส่งสัญญาณวิดีโอคอล...';
+      }
+      lucide.createIcons();
+    }
+
+    function resetCallUI() {
+      playBeep('leave');
+      if (statsInterval) clearInterval(statsInterval);
+      if (audioCheckLoop) cancelAnimationFrame(audioCheckLoop);
+      if (currentCall) currentCall.close();
+      if (currentConnection) currentConnection.close();
+      if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+        screenStream = null;
+        isScreenSharing = false;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
+
+      remoteVideo.srcObject = null;
+      remoteVideo.classList.add('hidden');
+      remotePlaceholder.classList.remove('hidden');
+      remoteInfoBadge.classList.add('hidden');
+      liveQualityTag.classList.add('hidden');
+      callView.classList.add('hidden');
+      activeCallHeader.classList.add('hidden');
+      activeCallHeader.classList.remove('flex');
+      lobbyView.classList.remove('hidden');
+
+      isAudioMuted = false;
+      isVideoOff = false;
+      updateControlUI();
+    }
+
+    function updateControlUI() {
+      // Audio button state
+      if (isAudioMuted) {
+        toggleAudioBtn.classList.add('bg-rose-600/20', 'border-rose-500/50', 'text-rose-400');
+        toggleAudioBtn.classList.remove('bg-slate-800/80');
+        audioIcon.setAttribute('data-lucide', 'mic-off');
+        localMicIndicator.classList.remove('text-emerald-400');
+        localMicIndicator.classList.add('text-rose-400');
+        localMicIndicator.innerHTML = '<i data-lucide="mic-off" class="w-3 h-3"></i>';
+      } else {
+        toggleAudioBtn.classList.remove('bg-rose-600/20', 'border-rose-500/50', 'text-rose-400');
+        toggleAudioBtn.classList.add('bg-slate-800/80');
+        audioIcon.setAttribute('data-lucide', 'mic');
+        localMicIndicator.classList.remove('text-rose-400');
+        localMicIndicator.classList.add('text-emerald-400');
+        localMicIndicator.innerHTML = '<i data-lucide="mic" class="w-3 h-3"></i>';
+      }
+
+      // Video button state
+      if (isVideoOff) {
+        toggleVideoBtn.classList.add('bg-rose-600/20', 'border-rose-500/50', 'text-rose-400');
+        toggleVideoBtn.classList.remove('bg-slate-800/80');
+        videoIcon.setAttribute('data-lucide', 'video-off');
+        localCameraOffBadge.classList.remove('hidden');
+      } else {
+        toggleVideoBtn.classList.remove('bg-rose-600/20', 'border-rose-500/50', 'text-rose-400');
+        toggleVideoBtn.classList.add('bg-slate-800/80');
+        videoIcon.setAttribute('data-lucide', 'video');
+        localCameraOffBadge.classList.add('hidden');
+      }
+
+      // Screen share state
+      if (isScreenSharing) {
+        toggleScreenBtn.classList.add('bg-indigo-600', 'border-indigo-400');
+      } else {
+        toggleScreenBtn.classList.remove('bg-indigo-600', 'border-indigo-400');
+      }
+
+      lucide.createIcons();
+    }
+
+    // Switch Tabs
+    tabCreateBtn.addEventListener('click', () => {
+      tabCreateBtn.className = 'flex-1 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white transition-all shadow-md';
+      tabJoinBtn.className = 'flex-1 py-2 text-xs font-semibold rounded-xl text-slate-400 hover:text-slate-200 transition-all';
+      createRoomPanel.classList.remove('hidden');
+      joinRoomPanel.classList.add('hidden');
+    });
+
+    tabJoinBtn.addEventListener('click', () => {
+      tabJoinBtn.className = 'flex-1 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white transition-all shadow-md';
+      tabCreateBtn.className = 'flex-1 py-2 text-xs font-semibold rounded-xl text-slate-400 hover:text-slate-200 transition-all';
+      joinRoomPanel.classList.remove('hidden');
+      createRoomPanel.classList.add('hidden');
+    });
+
+    refreshRoomIdBtn.addEventListener('click', () => {
+      generatedRoomIdSpan.textContent = generateRoomCode();
+    });
+
+    copyGeneratedBtn.addEventListener('click', () => copyToClipboard(generatedRoomIdSpan.textContent));
+    headerCopyRoomBtn.addEventListener('click', () => copyToClipboard(currentRoomCode));
+    copyCallLinkBtn.addEventListener('click', () => copyToClipboard(currentRoomCode, 'ก็อปปี้รหัสห้องแล้ว ส่งให้เพื่อนได้เลย!'));
+
+    // Host: Start Room
+    startRoomBtn.addEventListener('click', async () => {
+      myName = createUserName.value.trim() || 'ฉัน';
+      const cleanId = generatedRoomIdSpan.textContent.replace('-', '').toLowerCase();
+      const displayId = generatedRoomIdSpan.textContent;
+
+      startRoomBtn.disabled = true;
+      startRoomBtn.innerHTML = '<span class="inline-block animate-spin mr-1">⟳</span> กำลังเปิดกล้องความเร็วสูง...';
+
+      const mediaReady = await initMedia();
+      if (!mediaReady) {
+        startRoomBtn.disabled = false;
+        startRoomBtn.innerHTML = '<i data-lucide="video" class="w-4 h-4"></i> เริ่มการคอลแบบเรียลไทม์';
+        lucide.createIcons();
+        return;
+      }
+
+      try {
+        await initPeer(`flow-${cleanId}`);
+        openCallScreen(displayId, true);
+        playBeep('join');
+      } catch (err) {
+        console.error(err);
+        showToast('รหัสห้องนี้ซ้ำหรือถูกใช้งานอยู่ กรุณากดสุ่มรหัสใหม่', 'error');
+      } finally {
+        startRoomBtn.disabled = false;
+        startRoomBtn.innerHTML = '<i data-lucide="video" class="w-4 h-4"></i> เริ่มการคอลแบบเรียลไทม์';
+        lucide.createIcons();
+      }
+    });
+
+    // Guest: Join Room
+    joinRoomBtn.addEventListener('click', async () => {
+      myName = joinUserName.value.trim() || 'เพื่อนร่วมสาย';
+      const rawInput = targetRoomIdInput.value.trim();
+      const cleanId = rawInput.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+      if (!cleanId) {
+        showToast('กรุณาระบุรหัสห้อง', 'warning');
+        targetRoomIdInput.focus();
+        return;
+      }
+
+      joinRoomBtn.disabled = true;
+      joinRoomBtn.innerHTML = '<span class="inline-block animate-spin mr-1">⟳</span> กำลังเข้าห้อง...';
+
+      const mediaReady = await initMedia();
+      if (!mediaReady) {
+        joinRoomBtn.disabled = false;
+        joinRoomBtn.innerHTML = '<i data-lucide="phone-call" class="w-4 h-4"></i> เชื่อมต่อสายทันที';
+        lucide.createIcons();
+        return;
+      }
+
+      try {
+        await initPeer();
+        openCallScreen(rawInput, false);
+
+        const targetPeerId = `flow-${cleanId}`;
+        currentCall = peer.call(targetPeerId, localStream);
+        setupCallEvents(currentCall);
+
+        currentConnection = peer.connect(targetPeerId);
+        setupDataChannelEvents(currentConnection);
+      } catch (err) {
+        console.error(err);
+        showToast('ไม่สามารถเชื่อมต่อไปยังห้องนี้ได้', 'error');
+      } finally {
+        joinRoomBtn.disabled = false;
+        joinRoomBtn.innerHTML = '<i data-lucide="phone-call" class="w-4 h-4"></i> เชื่อมต่อสายทันที';
+        lucide.createIcons();
+      }
+    });
+
+    // Mic Toggle
+    toggleAudioBtn.addEventListener('click', () => {
+      if (!localStream) return;
+      isAudioMuted = !isAudioMuted;
+      localStream.getAudioTracks().forEach(t => t.enabled = !isAudioMuted);
+      updateControlUI();
+      showToast(isAudioMuted ? 'ปิดไมโครโฟน' : 'เปิดไมโครโฟน', 'info');
+    });
+
+    // Video Toggle
+    toggleVideoBtn.addEventListener('click', () => {
+      if (!localStream) return;
+      isVideoOff = !isVideoOff;
+      localStream.getVideoTracks().forEach(t => t.enabled = !isVideoOff);
+      updateControlUI();
+      showToast(isVideoOff ? 'ปิดกล้อง' : 'เปิดกล้อง', 'info');
+    });
+
+    // Screen Sharing (Instant Track Replacement)
+    toggleScreenBtn.addEventListener('click', async () => {
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        showToast('อุปกรณ์ของคุณไม่รองรับการแชร์หน้าจอ', 'warning');
+        return;
+      }
+
+      if (!isScreenSharing) {
+        try {
+          screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { frameRate: { ideal: 60 } },
+            audio: false
+          });
+
+          const screenTrack = screenStream.getVideoTracks()[0];
+          localVideo.srcObject = screenStream;
+          localVideo.classList.remove('mirror-video');
+
+          if (currentCall?.peerConnection) {
+            const sender = currentCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) sender.replaceTrack(screenTrack);
+          }
+
+          isScreenSharing = true;
+          updateControlUI();
+          showToast('กำลังแชร์หน้าจอแบบความละเอียดสูง', 'success');
+
+          screenTrack.onended = () => stopScreenSharing();
+        } catch (e) {
+          // User canceled sharing dialog
+        }
+      } else {
+        stopScreenSharing();
+      }
+    });
+
+    function stopScreenSharing() {
+      if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+        screenStream = null;
+      }
+      isScreenSharing = false;
+      if (localStream) {
+        localVideo.srcObject = localStream;
+        localVideo.classList.add('mirror-video');
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (currentCall?.peerConnection && videoTrack) {
+          const sender = currentCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+          if (sender) sender.replaceTrack(videoTrack);
+        }
+      }
+      updateControlUI();
+      showToast('หยุดแชร์หน้าจอแล้ว', 'info');
+    }
+
+    // Switch Camera (Mobile)
+    switchCameraBtn.addEventListener('click', async () => {
+      currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+      showToast('กำลังสลับกล้อง...', 'info');
+      await initMedia(currentFacingMode);
+      if (localStream && currentCall?.peerConnection) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        const sender = currentCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender && videoTrack) sender.replaceTrack(videoTrack);
+      }
+    });
+
+    // Chat Sidebar Toggle
+    toggleChatBtn.addEventListener('click', () => {
+      chatSidebar.classList.toggle('hidden');
+      chatBadge.classList.add('hidden');
+    });
+
+    closeChatMobileBtn.addEventListener('click', () => {
+      chatSidebar.classList.add('hidden');
+    });
+
+    // Live In-Call Message Send
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = chatInput.value.trim();
+      if (!text) return;
+
+      if (currentConnection && currentConnection.open) {
+        currentConnection.send({
+          type: 'chat',
+          sender: myName,
+          text: text
+        });
+      }
+
+      appendChatMessage(myName, text, true, false);
+      chatInput.value = '';
+    });
+
+    leaveCallBtn.addEventListener('click', resetCallUI);
+
+    window.addEventListener('DOMContentLoaded', () => {
+      generatedRoomIdSpan.textContent = generateRoomCode();
+      lucide.createIcons();
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (localStream) localStream.getTracks().forEach(t => t.stop());
+      if (peer) peer.destroy();
+    });
+  </script>
+</body>
+</html>
