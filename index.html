@@ -484,7 +484,17 @@
           messagingSenderId: "1234567890",
           appId: "1:1234567890:web:camvaultdummy"
         };
-
+// --- Firebase Configuration ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyB2MxyQRN-wCWvS-xxmvpAygU-6jstnzxY",
+      authDomain: "cumming-674ca.firebaseapp.com",
+      databaseURL: "https://cumming-674ca-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "cumming-674ca",
+      storageBucket: "cumming-674ca.firebasestorage.app",
+      messagingSenderId: "612384158913",
+      appId: "1:612384158913:web:c55aa85841ee7aadcc5040",
+      measurementId: "G-3VQ6XSVYBE"
+    };
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
