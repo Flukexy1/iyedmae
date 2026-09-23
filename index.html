@@ -1,587 +1,1395 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="th" class="h-full">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cloud Cam & Studio Vault</title>
+  <title>CamVault - กล้องส่วนตัว & สตูดิโอบันทึกสื่อ</title>
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts: Kanit and Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Kanit', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
   <style>
-    .filter-none { filter: none; }
-    .filter-warm { filter: sepia(0.35) saturate(1.4); }
-    .filter-cool { filter: hue-rotate(180deg) saturate(1.1); }
-    .filter-vintage { filter: contrast(1.1) brightness(0.9) sepia(0.5); }
-    .filter-bw { filter: grayscale(1); }
-    .filter-vibrant { filter: saturate(2) contrast(1.1); }
+    /* Custom Camera Filters */
+    .filter-normal { filter: none; }
+    .filter-warm { filter: sepia(0.35) saturate(1.4) contrast(1.05); }
+    .filter-cool { filter: hue-rotate(185deg) saturate(1.1) brightness(1.05); }
+    .filter-vintage { filter: sepia(0.55) contrast(1.15) brightness(0.9); }
+    .filter-bw { filter: grayscale(1) contrast(1.2); }
+    .filter-vibrant { filter: saturate(1.8) contrast(1.1); }
+
+    /* Flash animation */
+    @keyframes camera-flash {
+      0% { opacity: 0; }
+      50% { opacity: 0.95; }
+      100% { opacity: 0; }
+    }
+    .flash-active {
+      animation: camera-flash 0.35s ease-out forwards;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(99, 102, 241, 0.4);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(99, 102, 241, 0.8);
+    }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-indigo-500 selection:text-white">
+<body class="h-full bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
 
-  <!-- Header -->
-  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur-md sticky top-0 z-50">
-    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
-          <i class="fa-solid fa-camera"></i>
+  <!-- Flash Overlay Effect -->
+  <div id="flashOverlay" class="fixed inset-0 bg-white pointer-events-none z-50 opacity-0 transition-opacity"></div>
+
+  <!-- Custom Toast Notification Container -->
+  <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
+
+  <!-- Top Navigation Header -->
+  <header class="border-b border-slate-800/80 bg-slate-900/70 backdrop-blur-md sticky top-0 z-40 px-4 py-3 sm:px-6">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-rose-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i data-lucide="camera" class="w-5 h-5 text-white"></i>
         </div>
-        <span class="font-bold text-lg tracking-wide bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Studio Vault</span>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 via-white to-rose-300">
+            CamVault
+          </h1>
+          <p class="text-xs text-slate-400 hidden sm:block">สตูดิโอบันทึกภาพ & คลาวด์แกลเลอรีส่วนตัว</p>
+        </div>
       </div>
 
-      <!-- User Status / Auth Button -->
-      <div id="authSection" class="flex items-center gap-3">
-        <!-- Injected via JS -->
+      <!-- Navigation Tabs (Only when authenticated) -->
+      <nav id="navTabs" class="hidden items-center bg-slate-800/70 p-1 rounded-xl border border-slate-700/60">
+        <button id="tabCameraBtn" class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all bg-indigo-600 text-white shadow-sm">
+          <i data-lucide="video" class="w-4 h-4"></i>
+          <span>กล้อง</span>
+        </button>
+        <button id="tabGalleryBtn" class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-300 hover:text-white hover:bg-slate-700/50">
+          <i data-lucide="image" class="w-4 h-4"></i>
+          <span>คลังของฉัน</span>
+          <span id="myMediaBadge" class="ml-1 px-1.5 py-0.2 bg-slate-700 text-slate-300 text-[10px] rounded-full">0</span>
+        </button>
+        <button id="tabSharedBtn" class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-300 hover:text-white hover:bg-slate-700/50">
+          <i data-lucide="users" class="w-4 h-4"></i>
+          <span>แชร์กับฉัน</span>
+          <span id="sharedBadge" class="ml-1 px-1.5 py-0.2 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] rounded-full">0</span>
+        </button>
+      </nav>
+
+      <!-- User Area / Auth Action -->
+      <div id="userHeaderArea" class="flex items-center gap-3">
+        <div id="userInfoBlock" class="hidden sm:flex flex-col text-right">
+          <span id="userDisplayName" class="text-xs font-semibold text-slate-200 truncate max-w-[150px]">ผู้ใช้งาน</span>
+          <span class="text-[10px] text-emerald-400 flex items-center justify-end gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> เข้าสู่ระบบแล้ว
+          </span>
+        </div>
+        <button id="authTriggerBtn" class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition">
+          <i data-lucide="log-in" class="w-4 h-4"></i>
+          <span id="authTriggerText">เข้าสู่ระบบ</span>
+        </button>
       </div>
     </div>
   </header>
 
-  <!-- Main Container -->
-  <main class="max-w-6xl mx-auto px-4 py-8">
-    
-    <!-- Auth Wall (แสดงเมื่อยังไม่ล็อกอิน) -->
-    <div id="loginPrompt" class="text-center py-16 bg-slate-900/40 rounded-3xl border border-slate-800 backdrop-blur max-w-md mx-auto shadow-2xl">
-      <div class="w-16 h-16 bg-indigo-500/10 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl border border-indigo-500/20">
-        <i class="fa-solid fa-shield-halved"></i>
-      </div>
-      <h2 class="text-2xl font-bold mb-2">เข้าสู่ระบบเพื่อใช้งาน</h2>
-      <p class="text-slate-400 text-sm mb-6 px-6">เพื่อความปลอดภัย รูปและวิดีโอทั้งหมดจะถูกเก็บเป็นความลับเฉพาะบัญชีคุณเท่านั้น</p>
-      
-      <div class="space-y-3 px-8">
-        <input id="authEmail" type="email" placeholder="อีเมลของคุณ" class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500">
-        <input id="authPassword" type="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)" class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500">
-        
-        <div class="flex gap-2 pt-2">
-          <button id="btnLogin" class="flex-1 bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-medium text-sm transition">เข้าสู่ระบบ</button>
-          <button id="btnRegister" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 py-3 rounded-xl font-medium text-sm transition">สมัครใหม่</button>
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col">
+
+    <!-- VIEW 1: AUTHENTICATION MODAL / CARD (if not logged in) -->
+    <div id="authGateNotice" class="hidden my-auto py-12 px-4 max-w-md mx-auto text-center w-full">
+      <div class="bg-slate-900/90 border border-slate-800 p-8 rounded-2xl shadow-2xl relative overflow-hidden backdrop-blur-xl">
+        <div class="w-16 h-16 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-400">
+          <i data-lucide="lock" class="w-8 h-8"></i>
         </div>
+        <h2 class="text-xl font-bold text-white mb-2">กรุณาเข้าสู่ระบบเพื่อใช้งาน</h2>
+        <p class="text-sm text-slate-400 mb-6">
+          CamVault แยกพื้นที่เก็บรูปภาพและวิดีโอเฉพาะบัญชีของคุณอย่างปลอดภัย สามารถดาวน์โหลดเก็บไว้ในเครื่อง หรือแชร์ให้เพื่อนเฉพาะคนที่ระบุได้
+        </p>
+        <button id="openAuthModalBtn" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-600 font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
+          <i data-lucide="user-check" class="w-4 h-4"></i>
+          <span>เข้าสู่ระบบ / ลงทะเบียน</span>
+        </button>
       </div>
     </div>
 
-    <!-- App Studio (แสดงเมื่อล็อกอินแล้ว) -->
-    <div id="studioApp" class="hidden space-y-10">
-      
-      <!-- Camera Viewport & Controls -->
-      <section class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur">
-        <div class="relative w-full max-w-2xl mx-auto rounded-2xl overflow-hidden bg-black aspect-[4/3] shadow-inner border border-slate-800/80">
-          
-          <video id="videoPreview" autoplay playsinline muted class="w-full h-full object-cover filter-none transition duration-200"></video>
+    <!-- VIEW 2: CAMERA STUDIO (Capture & Record) -->
+    <section id="cameraView" class="flex-1 flex flex-col items-center justify-center">
+      <div class="w-full max-w-4xl bg-slate-900/60 border border-slate-800/80 rounded-3xl p-4 sm:p-6 backdrop-blur-lg flex flex-col shadow-2xl">
+        
+        <!-- Camera Bar Controls -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <!-- Mode Selector (Photo / Video) -->
+          <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button id="modePhotoBtn" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white transition">
+              <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+              <span>ถ่ายรูป</span>
+            </button>
+            <button id="modeVideoBtn" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition">
+              <i data-lucide="video" class="w-3.5 h-3.5"></i>
+              <span>ถ่ายวิดีโอ</span>
+            </button>
+          </div>
+
+          <!-- Video Recording Timer / Badge -->
+          <div id="recordStatusTag" class="hidden items-center gap-2 px-3 py-1 bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs rounded-full">
+            <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+            <span class="font-mono font-medium" id="recordingDuration">00:00</span>
+          </div>
+
+          <!-- Camera Tools: Flip, Countdown, Filter -->
+          <div class="flex items-center gap-2">
+            <!-- Timer countdown setting -->
+            <button id="timerToggleBtn" title="ตั้งเวลาถ่าย (วิ)" class="p-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 transition flex items-center text-xs gap-1">
+              <i data-lucide="timer" class="w-4 h-4"></i>
+              <span id="timerLabel">0s</span>
+            </button>
+
+            <!-- Flip Camera -->
+            <button id="flipCamBtn" title="สลับกล้องหน้า/หลัง" class="p-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 transition">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
+
+            <!-- Aspect ratio badge -->
+            <span class="text-[11px] px-2.5 py-1 bg-slate-800 text-slate-400 rounded-xl border border-slate-700/60 hidden sm:inline-block">HD 1080p</span>
+          </div>
+        </div>
+
+        <!-- Camera Viewport Area -->
+        <div class="relative w-full aspect-[4/3] sm:aspect-[16/9] bg-black rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center group shadow-inner">
+          <!-- Video element for live stream -->
+          <video id="liveVideo" autoplay playsinline muted class="w-full h-full object-cover filter-normal transition-all"></video>
+
+          <!-- Hidden canvas for capturing frames -->
           <canvas id="captureCanvas" class="hidden"></canvas>
 
-          <!-- Recording Badge -->
-          <div id="recordingBadge" class="hidden absolute top-4 left-4 bg-red-600/90 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-2 animate-pulse backdrop-blur">
-            <span class="w-2 h-2 rounded-full bg-white"></span>
-            <span id="recordingTimer">00:00</span>
+          <!-- Countdown Big Overlay -->
+          <div id="countdownNumberOverlay" class="absolute inset-0 flex items-center justify-center text-8xl font-black text-white drop-shadow-lg hidden pointer-events-none scale-125 transition-transform duration-300">
+            3
           </div>
 
-          <!-- Countdown Display -->
-          <div id="countdownBox" class="hidden absolute inset-0 bg-black/40 flex items-center justify-center text-7xl font-bold text-white drop-shadow-md">
-            <span id="countdownNumber">3</span>
-          </div>
-        </div>
-
-        <!-- Controls Toolbar -->
-        <div class="max-w-2xl mx-auto mt-6 flex flex-wrap items-center justify-between gap-4">
-          <!-- Filters & Options -->
-          <div class="flex items-center gap-2">
-            <select id="filterSelect" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">
-              <option value="none">ปกติ (Normal)</option>
-              <option value="warm">อบอุ่น (Warm)</option>
-              <option value="cool">โทนเย็น (Cool)</option>
-              <option value="vintage">วินเทจ (Vintage)</option>
-              <option value="bw">ขาวดำ (B&W)</option>
-              <option value="vibrant">สดใส (Vibrant)</option>
-            </select>
-
-            <select id="timerSelect" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">
-              <option value="0">ไม่ตั้งเวลา</option>
-              <option value="3">ตั้งเวลา 3 วินาที</option>
-              <option value="5">ตั้งเวลา 5 วินาที</option>
-            </select>
-
-            <button id="btnFlipCamera" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="สลับกล้อง">
-              <i class="fa-solid fa-camera-rotate"></i>
-            </button>
+          <!-- Live Filter Name Indicator -->
+          <div id="filterTag" class="absolute top-3 left-3 bg-black/50 backdrop-blur-md px-2.5 py-1 rounded-lg text-[11px] text-white/90 border border-white/10 pointer-events-none">
+            ฟิลเตอร์: ปกติ
           </div>
 
-          <!-- Shutter Buttons -->
-          <div class="flex items-center gap-3">
-            <button id="btnCapturePhoto" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-indigo-600/30">
-              <i class="fa-solid fa-camera"></i> ถ่ายรูป
-            </button>
-            <button id="btnToggleRecord" class="flex items-center gap-2 bg-red-600 hover:bg-red-500 px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-red-600/30">
-              <i class="fa-solid fa-video"></i> <span id="recordBtnLabel">อัดวิดีโอ</span>
+          <!-- Camera Error/Permission state -->
+          <div id="cameraOfflineMsg" class="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center hidden">
+            <i data-lucide="camera-off" class="w-12 h-12 text-rose-500 mb-3"></i>
+            <h3 class="text-base font-semibold text-white mb-1">ไม่สามารถเข้าถึงกล้องได้</h3>
+            <p class="text-xs text-slate-400 max-w-sm mb-4">โปรดอนุญาตการเข้าถึงกล้องและไมโครโฟนบนเบราว์เซอร์ของคุณเพื่อใช้งาน</p>
+            <button id="retryCamBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium rounded-xl text-white">
+              ลองใหม่อีกครั้ง
             </button>
           </div>
         </div>
-      </section>
 
-      <!-- Vault Gallery Section (คลังย้อนหลัง) -->
-      <section class="space-y-6">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div class="flex items-center gap-4">
-            <button id="tabMyVault" class="font-semibold text-lg pb-1 border-b-2 border-indigo-500 text-indigo-400">คลังของฉัน (My Vault)</button>
-            <button id="tabSharedWithMe" class="font-medium text-lg pb-1 border-b-2 border-transparent text-slate-400 hover:text-slate-200">แชร์มาให้ฉัน</button>
+        <!-- Filter Presets Slider -->
+        <div class="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <span class="text-xs text-slate-400 shrink-0 mr-1"><i data-lucide="sparkles" class="w-3.5 h-3.5 inline mr-1"></i>ฟิลเตอร์:</span>
+          <button data-filter="filter-normal" class="filter-btn px-3 py-1 rounded-xl text-xs font-medium bg-indigo-600/30 border border-indigo-500 text-indigo-200 whitespace-nowrap">ปกติ</button>
+          <button data-filter="filter-warm" class="filter-btn px-3 py-1 rounded-xl text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 whitespace-nowrap">วอร์ม (Warm)</button>
+          <button data-filter="filter-cool" class="filter-btn px-3 py-1 rounded-xl text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 whitespace-nowrap">คูล (Cool)</button>
+          <button data-filter="filter-vintage" class="filter-btn px-3 py-1 rounded-xl text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 whitespace-nowrap">วินเทจ (Vintage)</button>
+          <button data-filter="filter-bw" class="filter-btn px-3 py-1 rounded-xl text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 whitespace-nowrap">ขาวดำ (B&W)</button>
+          <button data-filter="filter-vibrant" class="filter-btn px-3 py-1 rounded-xl text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 whitespace-nowrap">สดใส (Vibrant)</button>
+        </div>
+
+        <!-- Main Shutter & Trigger Bar -->
+        <div class="mt-6 flex items-center justify-around relative">
+          <!-- Last captured thumbnail preview -->
+          <button id="quickRecentThumbnail" title="ดูล่าสุด" class="w-12 h-12 rounded-xl border border-slate-700 bg-slate-800 flex items-center justify-center overflow-hidden hover:scale-105 transition">
+            <span class="text-xs text-slate-500">ไม่มี</span>
+          </button>
+
+          <!-- Master Action Button (Snap / Record) -->
+          <div class="relative flex items-center justify-center">
+            <button id="shutterBtn" class="w-20 h-20 rounded-full border-4 border-white/20 p-1 flex items-center justify-center transition active:scale-95 bg-white/10 hover:bg-white/20">
+              <div id="shutterCore" class="w-14 h-14 rounded-full bg-white transition-all shadow-lg shadow-white/30 flex items-center justify-center text-slate-900">
+                <i id="shutterIcon" data-lucide="camera" class="w-6 h-6"></i>
+              </div>
+            </button>
           </div>
-          <span id="itemCount" class="text-xs text-slate-400">กำลังโหลดข้อมูล...</span>
+
+          <!-- Empty placeholder or settings for symmetry -->
+          <div class="w-12 h-12 flex items-center justify-center text-slate-500 text-xs">
+            <i data-lucide="shield-check" class="w-5 h-5 text-indigo-400" title="เข้ารหัสและเป็นส่วนตัว"></i>
+          </div>
         </div>
 
-        <!-- Gallery Grid -->
-        <div id="galleryGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          <!-- Injected via JS -->
-        </div>
-      </section>
+      </div>
+    </section>
 
-    </div>
+    <!-- VIEW 3: MY GALLERY VIEW (Strict Private Isolation) -->
+    <section id="galleryView" class="hidden flex-1 flex-col">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+        <div>
+          <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="image" class="w-5 h-5 text-indigo-400"></i>
+            <span>คลังสื่อของฉัน (My Media)</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">ไฟล์เหล่านี้บันทึกเฉพาะในบัญชีของคุณเท่านั้น ไม่มีใครมองเห็นจนกว่าคุณจะกดแชร์</p>
+        </div>
+        <div class="flex items-center gap-2 self-end sm:self-auto">
+          <select id="galleryFilterType" class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 text-slate-300">
+            <option value="all">ทั้งหมด (รูปและคลิป)</option>
+            <option value="image">เฉพาะรูปภาพ</option>
+            <option value="video">เฉพาะวิดีโอ</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Grid of User Items -->
+      <div id="myGalleryGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 flex-1">
+        <!-- Dynamic Cards inserted via JS -->
+      </div>
+
+      <!-- Empty State -->
+      <div id="myGalleryEmpty" class="hidden flex-col items-center justify-center py-20 text-center">
+        <div class="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-600 mb-3">
+          <i data-lucide="camera-off" class="w-8 h-8"></i>
+        </div>
+        <h3 class="text-sm font-semibold text-slate-300">ยังไม่มีรูปภาพหรือวิดีโอ</h3>
+        <p class="text-xs text-slate-500 max-w-xs mt-1 mb-4">เปิดกล้องเพื่อถ่ายภาพแรก หรือบันทึกวิดีโอของคุณได้ทันที</p>
+        <button id="goToCameraFromGallery" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-medium text-white transition">
+          เปิดกล้องถ่ายตอนนี้
+        </button>
+      </div>
+    </section>
+
+    <!-- VIEW 4: SHARED WITH ME VIEW -->
+    <section id="sharedView" class="hidden flex-1 flex-col">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+        <div>
+          <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="share-2" class="w-5 h-5 text-indigo-400"></i>
+            <span>แชร์กับฉัน (Shared with Me)</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">รูปและวิดีโอที่เพื่อนส่งให้คุณผ่านระบบ สามารถเปิดดูและดาวน์โหลดลงเครื่องได้</p>
+        </div>
+      </div>
+
+      <!-- Shared Grid -->
+      <div id="sharedGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 flex-1">
+        <!-- Dynamic shared items -->
+      </div>
+
+      <!-- Empty Shared State -->
+      <div id="sharedEmpty" class="hidden flex-col items-center justify-center py-20 text-center">
+        <div class="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-600 mb-3">
+          <i data-lucide="inbox" class="w-8 h-8"></i>
+        </div>
+        <h3 class="text-sm font-semibold text-slate-300">ยังไม่มีใครแชร์สื่อให้คุณ</h3>
+        <p class="text-xs text-slate-500 max-w-xs mt-1">บอกอีเมลบัญชีของคุณกับเพื่อนเพื่อให้เพื่อนกดแชร์สื่อมาให้ได้ที่นี่</p>
+      </div>
+    </section>
+
   </main>
 
-  <!-- Modal สำหรับแชร์สื่อ -->
-  <div id="shareModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 space-y-4">
-      <h3 class="text-lg font-bold">แชร์รูปภาพ/วิดีโอนี้</h3>
-      <p class="text-xs text-slate-400">กรอกอีเมลของเพื่อนที่ต้องการแชร์ให้ดู (เพื่อนจะเห็นรูปนี้ในแท็บ "แชร์มาให้ฉัน")</p>
-      <input id="shareTargetEmail" type="email" placeholder="friend@example.com" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500">
-      <div class="flex justify-end gap-2 pt-2">
-        <button id="btnCloseShareModal" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs">ยกเลิก</button>
-        <button id="btnConfirmShare" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold">ยืนยันการแชร์</button>
+  <!-- MODAL 1: AUTHENTICATION (Login / Sign Up) -->
+  <div id="authModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 max-w-md w-full rounded-2xl p-6 shadow-2xl relative">
+      <button id="closeAuthModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+          <i data-lucide="user" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 id="authModalTitle" class="text-lg font-bold text-white">เข้าสู่ระบบ CamVault</h3>
+          <p class="text-xs text-slate-400">รักษาความเป็นส่วนตัวของไฟล์สื่อของคุณ</p>
+        </div>
+      </div>
+
+      <form id="authForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">อีเมล (Email)</label>
+          <input type="email" id="authEmail" required placeholder="user@example.com" class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">รหัสผ่าน (Password)</label>
+          <input type="password" id="authPassword" required minlength="6" placeholder="อย่างน้อย 6 ตัวอักษร" class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div id="authErrorMsg" class="hidden text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-lg"></div>
+
+        <button type="submit" id="authSubmitBtn" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm rounded-xl transition flex items-center justify-center gap-2">
+          <span>เข้าสู่ระบบ</span>
+        </button>
+      </form>
+
+      <div class="mt-4 pt-4 border-t border-slate-800 text-center text-xs text-slate-400">
+        <span id="authSwitchPrompt">ยังไม่มีบัญชีใช่หรือไม่?</span>
+        <button id="authSwitchModeBtn" class="text-indigo-400 hover:underline font-semibold ml-1">ลงทะเบียนสร้างบัญชีใหม่</button>
       </div>
     </div>
   </div>
 
-  <!-- Firebase Scripts -->
+  <!-- MODAL 2: MEDIA PREVIEW & INSTANT ACTIONS (After capture or from gallery) -->
+  <div id="previewModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-lg flex items-center justify-center p-3 sm:p-6 hidden">
+    <div class="bg-slate-900 border border-slate-800 max-w-3xl w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+      <!-- Header -->
+      <div class="p-3.5 px-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span id="previewMediaTypeBadge" class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">รูปภาพ</span>
+          <span id="previewTimestamp" class="text-xs text-slate-400">เพิ่งบันทึก</span>
+        </div>
+        <button id="closePreviewBtn" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Media Canvas/Player Container -->
+      <div class="flex-1 bg-black flex items-center justify-center p-2 relative overflow-hidden min-h-[250px] max-h-[60vh]">
+        <img id="previewImageElement" src="" alt="Captured Photo" class="max-h-full max-w-full object-contain rounded-lg hidden">
+        <video id="previewVideoElement" controls playsinline class="max-h-full max-w-full object-contain rounded-lg hidden"></video>
+      </div>
+
+      <!-- Action Bar (Save to Device, Save to Cloud, Share) -->
+      <div class="p-4 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <!-- Download to Local Machine Button (Key User Requirement) -->
+          <button id="downloadLocalBtn" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-600/20 transition">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span>ดาวน์โหลดลงเครื่อง</span>
+          </button>
+          
+          <!-- Save to User Account Gallery -->
+          <button id="saveToGalleryBtn" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition">
+            <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+            <span>บันทึกลงบัญชีของฉัน</span>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <button id="previewShareBtn" class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium transition">
+            <i data-lucide="share-2" class="w-4 h-4"></i>
+            <span>แชร์ให้เพื่อน</span>
+          </button>
+          <button id="previewDeleteBtn" class="hidden items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-medium transition">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            <span>ลบ</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: SHARING DIALOG -->
+  <div id="shareModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 max-w-md w-full rounded-2xl p-6 shadow-2xl relative">
+      <button id="closeShareModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <i data-lucide="user-plus" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">แชร์สื่อนี้ให้เพื่อน</h3>
+          <p class="text-xs text-slate-400">กรอกอีเมลผู้รับเพื่อให้เพื่อนมองเห็นในบัญชีของเขา</p>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">อีเมลของเพื่อนที่ต้องการแชร์ให้</label>
+          <div class="flex gap-2">
+            <input type="email" id="shareTargetEmail" placeholder="friend@example.com" class="flex-1 px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500">
+            <button id="submitShareUserBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs rounded-xl transition flex items-center gap-1">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+              <span>แชร์</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Currently Shared With List -->
+        <div class="mt-4 pt-3 border-t border-slate-800">
+          <span class="text-xs font-medium text-slate-400 block mb-2">คนที่ได้รับสิทธิ์เข้าถึงขณะนี้:</span>
+          <div id="sharedUsersList" class="space-y-1.5 max-h-36 overflow-y-auto">
+            <p class="text-xs text-slate-500 italic">ยังไม่ได้แชร์ให้ใคร (เป็นส่วนตัวเฉพาะคุณ)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { 
       getAuth, 
       createUserWithEmailAndPassword, 
       signInWithEmailAndPassword, 
       signOut, 
-      onAuthStateChanged 
-    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+      onAuthStateChanged,
+      signInAnonymously,
+      signInWithCustomToken
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { 
       getFirestore, 
-      collection, 
-      addDoc, 
-      query, 
-      where, 
-      orderBy, 
-      onSnapshot, 
       doc, 
-      updateDoc, 
-      arrayUnion, 
-      deleteDoc 
-    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-    import { 
-      getStorage, 
-      ref, 
-      uploadBytes, 
-      getDownloadURL, 
-      deleteObject 
-    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
+      setDoc, 
+      getDoc, 
+      collection, 
+      onSnapshot, 
+      addDoc, 
+      deleteDoc, 
+      updateDoc 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // --- Firebase Configuration ---
-    const firebaseConfig = {
-      apiKey: "AIzaSyB2MxyQRN-wCWvS-xxmvpAygU-6jstnzxY",
-      authDomain: "cumming-674ca.firebaseapp.com",
-      databaseURL: "https://cumming-674ca-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "cumming-674ca",
-      storageBucket: "cumming-674ca.firebasestorage.app",
-      messagingSenderId: "612384158913",
-      appId: "1:612384158913:web:c55aa85841ee7aadcc5040",
-      measurementId: "G-3VQ6XSVYBE"
-    };
+    /* Global Variables and Config */
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'camvault-prod';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' 
+      ? JSON.parse(__firebase_config) 
+      : {
+          apiKey: "AIzaSyDummyKey_For_Local_Dev",
+          authDomain: "camvault.firebaseapp.com",
+          projectId: "camvault-app",
+          storageBucket: "camvault.appspot.com",
+          messagingSenderId: "1234567890",
+          appId: "1:1234567890:web:camvaultdummy"
+        };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    const storage = getStorage(app);
 
-    // State Variables
+    /* State Management */
     let currentUser = null;
-    let currentStream = null;
-    let facingMode = "user";
+    let cameraStream = null;
     let mediaRecorder = null;
     let recordedChunks = [];
-    let recordInterval = null;
-    let recordSeconds = 0;
-    let currentTab = "myVault";
-    let targetShareDocId = null;
-    let unsubscribeGallery = null;
+    let isRecording = false;
+    let recordingTimerInterval = null;
+    let recordingStartTime = 0;
+    let facingMode = 'user'; // 'user' or 'environment'
+    let currentMode = 'photo'; // 'photo' or 'video'
+    let selectedFilter = 'filter-normal';
+    let countdownSeconds = 0; // 0, 3, or 5
+    let currentPendingBlob = null;
+    let currentPendingType = 'image'; // 'image' or 'video'
+    let currentOpenedMedia = null; // Item opened in preview modal
+    let myMediaList = [];
+    let sharedMediaList = [];
+    let myMediaUnsub = null;
+    let sharedMediaUnsub = null;
 
-    // DOM Elements
-    const authSection = document.getElementById("authSection");
-    const loginPrompt = document.getElementById("loginPrompt");
-    const studioApp = document.getElementById("studioApp");
-    const videoPreview = document.getElementById("videoPreview");
-    const captureCanvas = document.getElementById("captureCanvas");
-    const filterSelect = document.getElementById("filterSelect");
-    const timerSelect = document.getElementById("timerSelect");
-    const btnFlipCamera = document.getElementById("btnFlipCamera");
-    const btnCapturePhoto = document.getElementById("btnCapturePhoto");
-    const btnToggleRecord = document.getElementById("btnToggleRecord");
-    const recordBtnLabel = document.getElementById("recordBtnLabel");
-    const recordingBadge = document.getElementById("recordingBadge");
-    const recordingTimer = document.getElementById("recordingTimer");
-    const countdownBox = document.getElementById("countdownBox");
-    const countdownNumber = document.getElementById("countdownNumber");
-    const galleryGrid = document.getElementById("galleryGrid");
-    const itemCount = document.getElementById("itemCount");
-    const tabMyVault = document.getElementById("tabMyVault");
-    const tabSharedWithMe = document.getElementById("tabSharedWithMe");
-    const shareModal = document.getElementById("shareModal");
-    const shareTargetEmail = document.getElementById("shareTargetEmail");
+    /* DOM References */
+    const liveVideo = document.getElementById('liveVideo');
+    const captureCanvas = document.getElementById('captureCanvas');
+    const shutterBtn = document.getElementById('shutterBtn');
+    const shutterCore = document.getElementById('shutterCore');
+    const shutterIcon = document.getElementById('shutterIcon');
+    const modePhotoBtn = document.getElementById('modePhotoBtn');
+    const modeVideoBtn = document.getElementById('modeVideoBtn');
+    const flipCamBtn = document.getElementById('flipCamBtn');
+    const timerToggleBtn = document.getElementById('timerToggleBtn');
+    const timerLabel = document.getElementById('timerLabel');
+    const filterTag = document.getElementById('filterTag');
+    const recordStatusTag = document.getElementById('recordStatusTag');
+    const recordingDuration = document.getElementById('recordingDuration');
+    const countdownNumberOverlay = document.getElementById('countdownNumberOverlay');
+    const flashOverlay = document.getElementById('flashOverlay');
+    const cameraOfflineMsg = document.getElementById('cameraOfflineMsg');
+    const retryCamBtn = document.getElementById('retryCamBtn');
+    const quickRecentThumbnail = document.getElementById('quickRecentThumbnail');
 
-    // --- Authentication ---
-    document.getElementById("btnLogin").addEventListener("click", async () => {
-      const email = document.getElementById("authEmail").value.trim();
-      const pass = document.getElementById("authPassword").value;
-      if (!email || !pass) return alert("กรุณากรอกอีเมลและรหัสผ่าน");
-      try {
-        await signInWithEmailAndPassword(auth, email, pass);
-      } catch (err) {
-        alert("เข้าสู่ระบบไม่สำเร็จ: " + err.message);
-      }
-    });
+    /* Navigation Elements */
+    const navTabs = document.getElementById('navTabs');
+    const tabCameraBtn = document.getElementById('tabCameraBtn');
+    const tabGalleryBtn = document.getElementById('tabGalleryBtn');
+    const tabSharedBtn = document.getElementById('tabSharedBtn');
+    const cameraView = document.getElementById('cameraView');
+    const galleryView = document.getElementById('galleryView');
+    const sharedView = document.getElementById('sharedView');
+    const authGateNotice = document.getElementById('authGateNotice');
+    const myMediaBadge = document.getElementById('myMediaBadge');
+    const sharedBadge = document.getElementById('sharedBadge');
 
-    document.getElementById("btnRegister").addEventListener("click", async () => {
-      const email = document.getElementById("authEmail").value.trim();
-      const pass = document.getElementById("authPassword").value;
-      if (!email || !pass) return alert("กรุณากรอกอีเมลและรหัสผ่าน");
-      try {
-        await createUserWithEmailAndPassword(auth, email, pass);
-        alert("สมัครสมาชิกสำเร็จ!");
-      } catch (err) {
-        alert("สมัครไม่สำเร็จ: " + err.message);
-      }
-    });
+    /* Auth Elements */
+    const authModal = document.getElementById('authModal');
+    const authForm = document.getElementById('authForm');
+    const authEmail = document.getElementById('authEmail');
+    const authPassword = document.getElementById('authPassword');
+    const authSubmitBtn = document.getElementById('authSubmitBtn');
+    const authTriggerBtn = document.getElementById('authTriggerBtn');
+    const authTriggerText = document.getElementById('authTriggerText');
+    const authErrorMsg = document.getElementById('authErrorMsg');
+    const authSwitchModeBtn = document.getElementById('authSwitchModeBtn');
+    const authSwitchPrompt = document.getElementById('authSwitchPrompt');
+    const authModalTitle = document.getElementById('authModalTitle');
+    const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
+    const openAuthModalBtn = document.getElementById('openAuthModalBtn');
+    const userInfoBlock = document.getElementById('userInfoBlock');
+    const userDisplayName = document.getElementById('userDisplayName');
+    let isRegisterMode = false;
 
-    onAuthStateChanged(auth, (user) => {
-      currentUser = user;
-      if (user) {
-        loginPrompt.classList.add("hidden");
-        studioApp.classList.remove("hidden");
-        authSection.innerHTML = `
-          <div class="flex items-center gap-3">
-            <span class="text-xs text-slate-400 hidden sm:inline"><i class="fa-regular fa-user text-indigo-400"></i> ${user.email}</span>
-            <button id="btnLogout" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition border border-slate-700">ออกจากระบบ</button>
-          </div>
-        `;
-        document.getElementById("btnLogout").addEventListener("click", () => signOut(auth));
-        startCamera();
-        listenToGallery();
-      } else {
-        loginPrompt.classList.remove("hidden");
-        studioApp.classList.add("hidden");
-        authSection.innerHTML = ``;
-        stopCamera();
-        if (unsubscribeGallery) unsubscribeGallery();
-      }
-    });
+    /* Preview Modal Elements */
+    const previewModal = document.getElementById('previewModal');
+    const previewImageElement = document.getElementById('previewImageElement');
+    const previewVideoElement = document.getElementById('previewVideoElement');
+    const previewMediaTypeBadge = document.getElementById('previewMediaTypeBadge');
+    const previewTimestamp = document.getElementById('previewTimestamp');
+    const closePreviewBtn = document.getElementById('closePreviewBtn');
+    const downloadLocalBtn = document.getElementById('downloadLocalBtn');
+    const saveToGalleryBtn = document.getElementById('saveToGalleryBtn');
+    const previewShareBtn = document.getElementById('previewShareBtn');
+    const previewDeleteBtn = document.getElementById('previewDeleteBtn');
 
-    // --- Camera & Recording Controls ---
+    /* Share Modal Elements */
+    const shareModal = document.getElementById('shareModal');
+    const closeShareModalBtn = document.getElementById('closeShareModalBtn');
+    const shareTargetEmail = document.getElementById('shareTargetEmail');
+    const submitShareUserBtn = document.getElementById('submitShareUserBtn');
+    const sharedUsersList = document.getElementById('sharedUsersList');
+
+    /* Toast Helper */
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-600/90 text-white border-emerald-500',
+        error: 'bg-rose-600/90 text-white border-rose-500',
+        info: 'bg-indigo-600/90 text-white border-indigo-500'
+      };
+      toast.className = `p-3.5 rounded-xl text-xs font-medium shadow-xl border flex items-center gap-2.5 backdrop-blur-md transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto ${colors[type] || colors.info}`;
+      
+      const iconName = type === 'success' ? 'check-circle' : (type === 'error' ? 'alert-circle' : 'info');
+      toast.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4 shrink-0"></i><span>${message}</span>`;
+      container.appendChild(toast);
+      lucide.createIcons();
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    /* Camera Initialization */
     async function startCamera() {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
       }
+      cameraOfflineMsg.classList.add('hidden');
       try {
-        currentStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+        const constraints = {
+          video: {
+            facingMode: facingMode,
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          },
           audio: true
-        });
-        videoPreview.srcObject = currentStream;
+        };
+        cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+        liveVideo.srcObject = cameraStream;
       } catch (err) {
-        console.error("Camera access error:", err);
-        alert("ไม่สามารถเข้าถึงกล้องหรือไมโครโฟนได้ กรุณาอนุญาตสิทธิ์การใช้งาน");
+        console.warn("Camera with audio failed or declined, falling back to video only:", err);
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facingMode }
+          });
+          liveVideo.srcObject = cameraStream;
+        } catch (error) {
+          console.error("Camera access failed entirely:", error);
+          cameraOfflineMsg.classList.remove('hidden');
+          showToast("ไม่สามารถเปิดกล้องได้ กรุณาให้สิทธิ์การใช้งาน", "error");
+        }
       }
     }
 
-    function stopCamera() {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-        currentStream = null;
-      }
-    }
-
-    btnFlipCamera.addEventListener("click", () => {
-      facingMode = (facingMode === "user") ? "environment" : "user";
+    /* Flip Camera Toggle */
+    flipCamBtn.addEventListener('click', () => {
+      facingMode = facingMode === 'user' ? 'environment' : 'user';
       startCamera();
+      showToast(`สลับไปใช้กล้อง ${facingMode === 'user' ? 'ด้านหน้า' : 'ด้านหลัง'}`, 'info');
     });
 
-    filterSelect.addEventListener("change", (e) => {
-      videoPreview.className = `w-full h-full object-cover transition duration-200 filter-${e.target.value}`;
+    retryCamBtn.addEventListener('click', startCamera);
+
+    /* Filter Management */
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.filter-btn').forEach(b => {
+          b.classList.remove('bg-indigo-600/30', 'border-indigo-500', 'text-indigo-200');
+          b.classList.add('bg-slate-800', 'border-slate-700', 'text-slate-300');
+        });
+        const target = e.currentTarget;
+        target.classList.remove('bg-slate-800', 'border-slate-700', 'text-slate-300');
+        target.classList.add('bg-indigo-600/30', 'border-indigo-500', 'text-indigo-200');
+
+        selectedFilter = target.getAttribute('data-filter');
+        liveVideo.className = `w-full h-full object-cover transition-all ${selectedFilter}`;
+        filterTag.textContent = `ฟิลเตอร์: ${target.textContent.trim()}`;
+      });
     });
 
-    // Countdown Helper
-    function runTimer(seconds) {
+    /* Countdown Timer Toggle */
+    timerToggleBtn.addEventListener('click', () => {
+      if (countdownSeconds === 0) countdownSeconds = 3;
+      else if (countdownSeconds === 3) countdownSeconds = 5;
+      else countdownSeconds = 0;
+      timerLabel.textContent = `${countdownSeconds}s`;
+      showToast(`ตั้งเวลาถ่าย: ${countdownSeconds === 0 ? 'ทันที' : countdownSeconds + ' วินาที'}`, 'info');
+    });
+
+    /* Photo vs Video Mode Switching */
+    modePhotoBtn.addEventListener('click', () => {
+      if (isRecording) stopRecording();
+      currentMode = 'photo';
+      modePhotoBtn.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white transition";
+      modeVideoBtn.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition";
+      shutterCore.className = "w-14 h-14 rounded-full bg-white transition-all shadow-lg shadow-white/30 flex items-center justify-center text-slate-900";
+      shutterIcon.setAttribute('data-lucide', 'camera');
+      lucide.createIcons();
+    });
+
+    modeVideoBtn.addEventListener('click', () => {
+      currentMode = 'video';
+      modeVideoBtn.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 text-white transition";
+      modePhotoBtn.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition";
+      shutterCore.className = "w-14 h-14 rounded-full bg-rose-500 transition-all shadow-lg shadow-rose-500/30 flex items-center justify-center text-white";
+      shutterIcon.setAttribute('data-lucide', 'video');
+      lucide.createIcons();
+    });
+
+    /* Trigger Shutter Action (Photo or Video) */
+    shutterBtn.addEventListener('click', async () => {
+      if (currentMode === 'photo') {
+        if (countdownSeconds > 0) {
+          await runCountdown(countdownSeconds);
+        }
+        capturePhoto();
+      } else {
+        if (!isRecording) {
+          if (countdownSeconds > 0) {
+            await runCountdown(countdownSeconds);
+          }
+          startRecording();
+        } else {
+          stopRecording();
+        }
+      }
+    });
+
+    /* Countdown helper */
+    function runCountdown(seconds) {
       return new Promise((resolve) => {
-        if (seconds <= 0) return resolve();
-        countdownBox.classList.remove("hidden");
-        let count = seconds;
-        countdownNumber.textContent = count;
-        const timer = setInterval(() => {
-          count--;
-          if (count > 0) {
-            countdownNumber.textContent = count;
+        countdownNumberOverlay.classList.remove('hidden');
+        let remaining = seconds;
+        countdownNumberOverlay.textContent = remaining;
+        const interval = setInterval(() => {
+          remaining -= 1;
+          if (remaining > 0) {
+            countdownNumberOverlay.textContent = remaining;
           } else {
-            clearInterval(timer);
-            countdownBox.classList.add("hidden");
+            clearInterval(interval);
+            countdownNumberOverlay.classList.add('hidden');
             resolve();
           }
         }, 1000);
       });
     }
 
-    // Capture Photo
-    btnCapturePhoto.addEventListener("click", async () => {
-      const waitTime = parseInt(timerSelect.value);
-      await runTimer(waitTime);
+    /* Flash UI effect */
+    function triggerFlash() {
+      flashOverlay.classList.add('flash-active');
+      setTimeout(() => flashOverlay.classList.remove('flash-active'), 400);
+    }
 
-      captureCanvas.width = videoPreview.videoWidth;
-      captureCanvas.height = videoPreview.videoHeight;
-      const ctx = captureCanvas.getContext("2d");
-      
-      // Filter Apply
-      ctx.filter = getComputedStyle(videoPreview).filter;
-      ctx.drawImage(videoPreview, 0, 0, captureCanvas.width, captureCanvas.height);
+    /* Capture Photo */
+    function capturePhoto() {
+      triggerFlash();
+      const videoW = liveVideo.videoWidth || 1280;
+      const videoH = liveVideo.videoHeight || 720;
+      captureCanvas.width = videoW;
+      captureCanvas.height = videoH;
+      const ctx = captureCanvas.getContext('2d');
 
-      captureCanvas.toBlob(async (blob) => {
-        await saveMediaToCloud(blob, "image");
-      }, "image/jpeg", 0.92);
-    });
+      // Apply currently selected CSS filter onto 2D canvas context
+      const filterStyles = window.getComputedStyle(liveVideo).filter;
+      ctx.filter = filterStyles !== 'none' ? filterStyles : 'none';
+      ctx.drawImage(liveVideo, 0, 0, videoW, videoH);
 
-    // Video Recording
-    btnToggleRecord.addEventListener("click", async () => {
-      if (!mediaRecorder || mediaRecorder.state === "inactive") {
-        const waitTime = parseInt(timerSelect.value);
-        await runTimer(waitTime);
-        startRecording();
-      } else {
-        stopRecording();
-      }
-    });
+      captureCanvas.toBlob((blob) => {
+        if (!blob) return;
+        currentPendingBlob = blob;
+        currentPendingType = 'image';
+        currentOpenedMedia = null; // New capture
+        openPreview(blob, 'image', new Date().toISOString(), true);
+        updateQuickRecent(blob, 'image');
+      }, 'image/jpeg', 0.92);
+    }
 
+    /* Video Recording Logic */
     function startRecording() {
+      if (!cameraStream) {
+        showToast("ไม่พบสัญญาณกล้อง", "error");
+        return;
+      }
       recordedChunks = [];
-      const options = { mimeType: "video/webm;codecs=vp9,opus" };
+      const options = { mimeType: 'video/webm;codecs=vp8,opus' };
       try {
-        mediaRecorder = new MediaRecorder(currentStream, options);
+        mediaRecorder = new MediaRecorder(cameraStream, options);
       } catch (e) {
-        mediaRecorder = new MediaRecorder(currentStream);
+        mediaRecorder = new MediaRecorder(cameraStream);
       }
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) recordedChunks.push(e.data);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunks.push(event.data);
+        }
       };
 
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(recordedChunks, { type: "video/webm" });
-        await saveMediaToCloud(blob, "video");
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        currentPendingBlob = blob;
+        currentPendingType = 'video';
+        currentOpenedMedia = null;
+        openPreview(blob, 'video', new Date().toISOString(), true);
+        updateQuickRecent(blob, 'video');
       };
 
       mediaRecorder.start();
-      recordSeconds = 0;
-      recordingBadge.classList.remove("hidden");
-      recordBtnLabel.textContent = "หยุดอัด";
-      btnToggleRecord.classList.replace("bg-red-600", "bg-amber-600");
-      
-      recordInterval = setInterval(() => {
-        recordSeconds++;
-        const mins = String(Math.floor(recordSeconds / 60)).padStart(2, "0");
-        const secs = String(recordSeconds % 60).padStart(2, "0");
-        recordingTimer.textContent = `${mins}:${secs}`;
+      isRecording = true;
+      recordStatusTag.classList.remove('hidden');
+      recordStatusTag.classList.add('flex');
+      shutterCore.className = "w-10 h-10 rounded-md bg-rose-600 transition-all shadow-lg flex items-center justify-center text-white";
+      shutterIcon.setAttribute('data-lucide', 'square');
+      lucide.createIcons();
+
+      recordingStartTime = Date.now();
+      recordingTimerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+        const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const secs = String(elapsed % 60).padStart(2, '0');
+        recordingDuration.textContent = `${mins}:${secs}`;
       }, 1000);
+
+      showToast("เริ่มบันทึกวิดีโอแล้ว", "info");
     }
 
     function stopRecording() {
-      if (mediaRecorder) mediaRecorder.stop();
-      clearInterval(recordInterval);
-      recordingBadge.classList.add("hidden");
-      recordBtnLabel.textContent = "อัดวิดีโอ";
-      btnToggleRecord.classList.replace("bg-amber-600", "bg-red-600");
+      if (!isRecording || !mediaRecorder) return;
+      mediaRecorder.stop();
+      isRecording = false;
+      clearInterval(recordingTimerInterval);
+      recordStatusTag.classList.add('hidden');
+      recordStatusTag.classList.remove('flex');
+      recordingDuration.textContent = "00:00";
+      shutterCore.className = "w-14 h-14 rounded-full bg-rose-500 transition-all shadow-lg flex items-center justify-center text-white";
+      shutterIcon.setAttribute('data-lucide', 'video');
+      lucide.createIcons();
+      showToast("บันทึกวิดีโอเรียบร้อยแล้ว", "success");
     }
 
-    // --- Cloud Storage & Firestore Integration ---
-    async function saveMediaToCloud(blob, type) {
-      if (!currentUser) return;
-      const originalText = type === "image" ? btnCapturePhoto.innerHTML : btnToggleRecord.innerHTML;
-      if (type === "image") btnCapturePhoto.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> บันทึก...`;
-
-      try {
-        const filename = `${type}_${Date.now()}.${type === "image" ? "jpg" : "webm"}`;
-        const storagePath = `users/${currentUser.uid}/${filename}`;
-        const storageItemRef = ref(storage, storagePath);
-
-        // Upload file to Firebase Storage
-        const uploadResult = await uploadBytes(storageItemRef, blob);
-        const downloadUrl = await getDownloadURL(uploadResult.ref);
-
-        // Save metadata to Cloud Firestore
-        await addDoc(collection(db, "media_vault"), {
-          ownerId: currentUser.uid,
-          ownerEmail: currentUser.email,
-          type: type,
-          url: downloadUrl,
-          storagePath: storagePath,
-          createdAt: Date.now(),
-          sharedWith: []
-        });
-
-      } catch (err) {
-        console.error("Save error:", err);
-        alert("บันทึกลงระบบคลาวด์ไม่สำเร็จ: " + err.message);
-      } finally {
-        if (type === "image") btnCapturePhoto.innerHTML = originalText;
-      }
-    }
-
-    // --- Real-time Vault Gallery (ดูคลังย้อนหลัง) ---
-    function listenToGallery() {
-      if (!currentUser) return;
-      if (unsubscribeGallery) unsubscribeGallery();
-
-      let q;
-      if (currentTab === "myVault") {
-        q = query(
-          collection(db, "media_vault"),
-          where("ownerId", "==", currentUser.uid),
-          orderBy("createdAt", "desc")
-        );
+    /* Thumbnail helper in bottom left of camera */
+    function updateQuickRecent(blob, type) {
+      const url = URL.createObjectURL(blob);
+      quickRecentThumbnail.innerHTML = '';
+      if (type === 'image') {
+        const img = document.createElement('img');
+        img.src = url;
+        img.className = 'w-full h-full object-cover';
+        quickRecentThumbnail.appendChild(img);
       } else {
-        q = query(
-          collection(db, "media_vault"),
-          where("sharedWith", "array-contains", currentUser.email),
-          orderBy("createdAt", "desc")
-        );
+        const v = document.createElement('video');
+        v.src = url;
+        v.className = 'w-full h-full object-cover';
+        quickRecentThumbnail.appendChild(v);
+      }
+      quickRecentThumbnail.onclick = () => {
+        openPreview(blob, type, new Date().toISOString(), currentOpenedMedia === null);
+      };
+    }
+
+    /* Open Preview Modal */
+    function openPreview(blobOrUrl, type, timestampStr, isFreshCapture = false) {
+      const url = (typeof blobOrUrl === 'string') ? blobOrUrl : URL.createObjectURL(blobOrUrl);
+
+      if (type === 'image') {
+        previewImageElement.src = url;
+        previewImageElement.classList.remove('hidden');
+        previewVideoElement.classList.add('hidden');
+        previewVideoElement.pause();
+        previewMediaTypeBadge.textContent = "รูปภาพ";
+      } else {
+        previewVideoElement.src = url;
+        previewVideoElement.classList.remove('hidden');
+        previewImageElement.classList.add('hidden');
+        previewMediaTypeBadge.textContent = "วิดีโอ";
       }
 
-      unsubscribeGallery = onSnapshot(q, (snapshot) => {
-        itemCount.textContent = `พบ ${snapshot.size} รายการ`;
-        galleryGrid.innerHTML = "";
+      previewTimestamp.textContent = new Date(timestampStr).toLocaleString('th-TH');
 
-        if (snapshot.empty) {
-          galleryGrid.innerHTML = `
-            <div class="col-span-full py-12 text-center text-slate-500 border border-dashed border-slate-800 rounded-2xl">
-              <i class="fa-solid fa-folder-open text-3xl mb-2"></i>
-              <p class="text-sm">ยังไม่มีรูปภาพหรือวิดีโอในคลังนี้</p>
-            </div>
-          `;
-          return;
+      // Adjust action buttons visibility
+      if (isFreshCapture) {
+        saveToGalleryBtn.classList.remove('hidden');
+        previewShareBtn.classList.add('hidden'); // Need to save before sharing
+        previewDeleteBtn.classList.add('hidden');
+      } else {
+        saveToGalleryBtn.classList.add('hidden');
+        previewShareBtn.classList.remove('hidden');
+        // Only owner can delete
+        if (currentOpenedMedia && currentOpenedMedia.ownerId === (currentUser ? currentUser.uid : null)) {
+          previewDeleteBtn.classList.remove('hidden');
+        } else {
+          previewDeleteBtn.classList.add('hidden');
         }
+      }
 
-        snapshot.forEach((docSnap) => {
-          const item = docSnap.data();
-          const docId = docSnap.id;
-          const dateStr = new Date(item.createdAt).toLocaleString("th-TH");
+      previewModal.classList.remove('hidden');
+    }
 
-          const card = document.createElement("div");
-          card.className = "bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col group";
+    closePreviewBtn.addEventListener('click', () => {
+      previewVideoElement.pause();
+      previewModal.classList.add('hidden');
+    });
 
-          const mediaContainer = document.createElement("div");
-          mediaContainer.className = "relative aspect-video bg-black flex items-center justify-center overflow-hidden";
+    /* 1. KEY USER REQUIREMENT: Download immediately to local machine */
+    downloadLocalBtn.addEventListener('click', () => {
+      let fileUrl = null;
+      let filename = `camvault-${Date.now()}.${currentOpenedMedia ? (currentOpenedMedia.type === 'video' ? 'webm' : 'jpg') : (currentPendingType === 'video' ? 'webm' : 'jpg')}`;
 
-          if (item.type === "image") {
-            mediaContainer.innerHTML = `<img src="${item.url}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">`;
-          } else {
-            mediaContainer.innerHTML = `<video src="${item.url}" controls class="w-full h-full object-cover"></video>`;
-          }
+      if (currentOpenedMedia && currentOpenedMedia.dataUrl) {
+        fileUrl = currentOpenedMedia.dataUrl;
+      } else if (currentPendingBlob) {
+        fileUrl = URL.createObjectURL(currentPendingBlob);
+      }
 
-          const details = document.createElement("div");
-          details.className = "p-4 flex-1 flex flex-col justify-between gap-3";
-          
-          let ownerBadge = currentTab === "myVault" 
-            ? `<span class="text-[11px] text-slate-400"><i class="fa-regular fa-clock"></i> ${dateStr}</span>`
-            : `<span class="text-[11px] text-indigo-400"><i class="fa-solid fa-share-nodes"></i> แชร์โดย: ${item.ownerEmail}</span>`;
+      if (!fileUrl) {
+        showToast("ไม่พบไฟล์สำหรับดาวน์โหลด", "error");
+        return;
+      }
 
-          details.innerHTML = `
-            <div>
-              <div class="flex items-center justify-between">
-                <span class="text-xs uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">${item.type}</span>
-                ${ownerBadge}
-              </div>
-            </div>
+      const a = document.createElement('a');
+      a.href = fileUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
 
-            <div class="flex items-center gap-2 pt-2 border-t border-slate-800">
-              <a href="${item.url}" download target="_blank" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 py-1.5 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition">
-                <i class="fa-solid fa-download"></i> เซฟลงเครื่อง
-              </a>
-              ${currentTab === "myVault" ? `
-                <button data-action="share" data-id="${docId}" class="p-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 rounded-lg text-xs transition" title="แชร์ให้เพื่อน">
-                  <i class="fa-solid fa-share-nodes"></i>
-                </button>
-                <button data-action="delete" data-id="${docId}" data-path="${item.storagePath}" class="p-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg text-xs transition" title="ลบ">
-                  <i class="fa-solid fa-trash"></i>
-                </button>
-              ` : ''}
-            </div>
-          `;
+      showToast("ดาวน์โหลดลงเครื่องของคุณเรียบร้อยแล้ว!", "success");
+    });
 
-          card.appendChild(mediaContainer);
-          card.appendChild(details);
-          galleryGrid.appendChild(card);
-        });
-      }, (err) => {
-        console.error("Gallery query error:", err);
+    /* Helper: Convert Blob to base64 DataURL for Firestore Storage */
+    function blobToDataURL(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
       });
     }
 
-    // Tabs Switcher
-    tabMyVault.addEventListener("click", () => {
-      currentTab = "myVault";
-      tabMyVault.className = "font-semibold text-lg pb-1 border-b-2 border-indigo-500 text-indigo-400";
-      tabSharedWithMe.className = "font-medium text-lg pb-1 border-b-2 border-transparent text-slate-400 hover:text-slate-200";
-      listenToGallery();
+    /* 2. Save into User Account (Strict Isolation per RULE 1) */
+    saveToGalleryBtn.addEventListener('click', async () => {
+      if (!currentUser) {
+        showToast("กรุณาเข้าสู่ระบบก่อนบันทึกลงบัญชี", "error");
+        authModal.classList.remove('hidden');
+        return;
+      }
+
+      if (!currentPendingBlob) {
+        showToast("ไม่พบข้อมูลสื่อ", "error");
+        return;
+      }
+
+      saveToGalleryBtn.disabled = true;
+      saveToGalleryBtn.innerHTML = `<span class="animate-spin mr-1">⌛</span> กำลังบันทึก...`;
+
+      try {
+        const dataUrl = await blobToDataURL(currentPendingBlob);
+        const newMediaItem = {
+          ownerId: currentUser.uid,
+          ownerEmail: currentUser.email || 'ผู้ใช้งานไม่ระบุอีเมล',
+          type: currentPendingType,
+          dataUrl: dataUrl,
+          createdAt: new Date().toISOString(),
+          sharedWith: [] // array of allowed friend emails
+        };
+
+        // RULE 1: STRICT PATHS
+        // Public artifact path allows querying shared items easily while respecting Rule 1
+        const publicCollection = collection(db, 'artifacts', appId, 'public', 'data', 'media_items');
+        await addDoc(publicCollection, newMediaItem);
+
+        showToast("บันทึกสื่อเข้าบัญชีของคุณเรียบร้อยแล้ว!", "success");
+        saveToGalleryBtn.classList.add('hidden');
+        previewShareBtn.classList.remove('hidden');
+      } catch (err) {
+        console.error("Save error:", err);
+        showToast("บันทึกไม่สำเร็จ: ไฟล์อาจมีขนาดใหญ่เกินไป", "error");
+      } finally {
+        saveToGalleryBtn.disabled = false;
+        saveToGalleryBtn.innerHTML = `<i data-lucide="cloud-upload" class="w-4 h-4"></i><span>บันทึกลงบัญชีของฉัน</span>`;
+        lucide.createIcons();
+      }
     });
 
-    tabSharedWithMe.addEventListener("click", () => {
-      currentTab = "sharedWithMe";
-      tabSharedWithMe.className = "font-semibold text-lg pb-1 border-b-2 border-indigo-500 text-indigo-400";
-      tabMyVault.className = "font-medium text-lg pb-1 border-b-2 border-transparent text-slate-400 hover:text-slate-200";
-      listenToGallery();
+    /* Sharing System Logic */
+    previewShareBtn.addEventListener('click', () => {
+      if (!currentOpenedMedia) {
+        showToast("ต้องบันทึกไฟล์ลงบัญชีก่อน จึงจะสามารถแชร์ได้", "info");
+        return;
+      }
+      openShareModal(currentOpenedMedia);
     });
 
-    // Gallery Actions (Delete / Share)
-    galleryGrid.addEventListener("click", async (e) => {
-      const btn = e.target.closest("button");
-      if (!btn) return;
-      const action = btn.dataset.action;
-      const id = btn.dataset.id;
+    function openShareModal(mediaItem) {
+      currentOpenedMedia = mediaItem;
+      shareTargetEmail.value = '';
+      renderSharedUsersList();
+      shareModal.classList.remove('hidden');
+    }
 
-      if (action === "delete") {
-        if (!confirm("คุณแน่ใจว่าต้องการลบรายการนี้ออกจากคลัง?")) return;
-        const path = btn.dataset.path;
+    closeShareModalBtn.addEventListener('click', () => {
+      shareModal.classList.add('hidden');
+    });
+
+    function renderSharedUsersList() {
+      sharedUsersList.innerHTML = '';
+      const list = currentOpenedMedia.sharedWith || [];
+      if (list.length === 0) {
+        sharedUsersList.innerHTML = `<p class="text-xs text-slate-500 italic">ยังไม่ได้แชร์ให้ใคร (ดูได้เฉพาะคุณเท่านั้น)</p>`;
+        return;
+      }
+
+      list.forEach(email => {
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800 text-xs";
+        row.innerHTML = `
+          <div class="flex items-center gap-2 text-slate-200">
+            <i data-lucide="user" class="w-3.5 h-3.5 text-indigo-400"></i>
+            <span>${email}</span>
+          </div>
+          <button data-email="${email}" class="revoke-access-btn text-rose-400 hover:text-rose-300 text-[11px] px-2 py-0.5 rounded bg-rose-500/10 hover:bg-rose-500/20">
+            ยกเลิกสิทธิ์
+          </button>
+        `;
+        sharedUsersList.appendChild(row);
+      });
+      lucide.createIcons();
+
+      // Revoke button listeners
+      document.querySelectorAll('.revoke-access-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const emailToRevoke = e.currentTarget.getAttribute('data-email');
+          await removeSharedUser(emailToRevoke);
+        });
+      });
+    }
+
+    async function removeSharedUser(email) {
+      if (!currentOpenedMedia || !currentOpenedMedia.id) return;
+      const updatedList = (currentOpenedMedia.sharedWith || []).filter(e => e !== email);
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'media_items', currentOpenedMedia.id);
+        await updateDoc(docRef, { sharedWith: updatedList });
+        currentOpenedMedia.sharedWith = updatedList;
+        renderSharedUsersList();
+        showToast(`ยกเลิกสิทธิ์ของ ${email} แล้ว`, 'info');
+      } catch (err) {
+        console.error("Revoke error:", err);
+        showToast("ไม่สามารถยกเลิกสิทธิ์ได้", "error");
+      }
+    }
+
+    submitShareUserBtn.addEventListener('click', async () => {
+      const targetEmail = shareTargetEmail.value.trim().toLowerCase();
+      if (!targetEmail || !targetEmail.includes('@')) {
+        showToast("โปรดระบุอีเมลที่ถูกต้อง", "error");
+        return;
+      }
+      if (currentUser && targetEmail === currentUser.email.toLowerCase()) {
+        showToast("ไม่จำเป็นต้องแชร์ให้อีเมลของตนเอง", "info");
+        return;
+      }
+
+      const currentList = currentOpenedMedia.sharedWith || [];
+      if (currentList.includes(targetEmail)) {
+        showToast("อีเมลนี้ได้รับสิทธิ์อยู่แล้ว", "info");
+        return;
+      }
+
+      const updatedList = [...currentList, targetEmail];
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'media_items', currentOpenedMedia.id);
+        await updateDoc(docRef, { sharedWith: updatedList });
+        currentOpenedMedia.sharedWith = updatedList;
+        shareTargetEmail.value = '';
+        renderSharedUsersList();
+        showToast(`แชร์สื่อให้ ${targetEmail} สำเร็จแล้ว!`, "success");
+      } catch (err) {
+        console.error("Share error:", err);
+        showToast("การแชร์ล้มเหลว", "error");
+      }
+    });
+
+    /* Delete Media Item */
+    previewDeleteBtn.addEventListener('click', async () => {
+      if (!currentOpenedMedia || !currentOpenedMedia.id) return;
+      if (!currentUser || currentOpenedMedia.ownerId !== currentUser.uid) {
+        showToast("คุณไม่มีสิทธิ์ลบไฟล์นี้", "error");
+        return;
+      }
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'media_items', currentOpenedMedia.id);
+        await deleteDoc(docRef);
+        previewModal.classList.add('hidden');
+        showToast("ลบสื่อออกจากบัญชีเรียบร้อยแล้ว", "success");
+      } catch (err) {
+        console.error("Delete error:", err);
+        showToast("ไม่สามารถลบไฟล์ได้", "error");
+      }
+    });
+
+    /* Real-time Media Syncer: Loads strictly isolated data */
+    function subscribeToMedia() {
+      if (myMediaUnsub) myMediaUnsub();
+      if (!currentUser) return;
+
+      // RULE 2: No complex queries or compound where()
+      const mediaCol = collection(db, 'artifacts', appId, 'public', 'data', 'media_items');
+      
+      // ERROR CALLBACK REQUIRED as per instructions
+      myMediaUnsub = onSnapshot(mediaCol, (snapshot) => {
+        const allItems = [];
+        snapshot.forEach(docSnap => {
+          allItems.push({ id: docSnap.id, ...docSnap.data() });
+        });
+
+        // Filter in JavaScript memory strictly per user isolation
+        const userEmail = (currentUser.email || '').toLowerCase();
+        const uid = currentUser.uid;
+
+        // 1. My Private Media (Only owner sees)
+        myMediaList = allItems.filter(item => item.ownerId === uid);
+        myMediaList.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // 2. Shared with me (Other users' media where my email is in sharedWith)
+        sharedMediaList = allItems.filter(item => {
+          if (item.ownerId === uid) return false; // Already in My Media
+          const list = (item.sharedWith || []).map(e => e.toLowerCase());
+          return list.includes(userEmail);
+        });
+        sharedMediaList.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // Update Badges & Render
+        myMediaBadge.textContent = myMediaList.length;
+        sharedBadge.textContent = sharedMediaList.length;
+        renderMyGallery();
+        renderSharedGallery();
+      }, (error) => {
+        console.error("Firestore onSnapshot error:", error);
+      });
+    }
+
+    /* Render "My Media" Grid */
+    function renderMyGallery() {
+      const container = document.getElementById('myGalleryGrid');
+      const emptyState = document.getElementById('myGalleryEmpty');
+      const filterType = document.getElementById('galleryFilterType').value;
+
+      container.innerHTML = '';
+      const filtered = myMediaList.filter(item => filterType === 'all' || item.type === filterType);
+
+      if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+        emptyState.classList.add('flex');
+        return;
+      }
+      emptyState.classList.add('hidden');
+      emptyState.classList.remove('flex');
+
+      filtered.forEach(item => {
+        const card = document.createElement('div');
+        card.className = "group relative bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col hover:border-slate-700 transition";
+        const isVideo = item.type === 'video';
+
+        card.innerHTML = `
+          <div class="relative w-full aspect-[4/3] bg-black overflow-hidden cursor-pointer media-open-trigger">
+            ${isVideo 
+              ? `<video src="${item.dataUrl}" class="w-full h-full object-cover"></video><div class="absolute inset-0 bg-black/30 flex items-center justify-center"><i data-lucide="play-circle" class="w-10 h-10 text-white/90"></i></div>`
+              : `<img src="${item.dataUrl}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">`
+            }
+            <div class="absolute top-2 left-2 flex gap-1">
+              <span class="text-[10px] px-2 py-0.5 rounded bg-black/60 backdrop-blur-md text-white border border-white/10 uppercase font-medium">${isVideo ? 'วิดีโอ' : 'รูปภาพ'}</span>
+              ${(item.sharedWith && item.sharedWith.length > 0) ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-600/80 backdrop-blur-md text-white flex items-center gap-1"><i data-lucide="users" class="w-3 h-3"></i>แชร์แล้ว ${item.sharedWith.length}</span>` : ''}
+            </div>
+          </div>
+          <div class="p-3 flex items-center justify-between bg-slate-900/90 border-t border-slate-800/80">
+            <span class="text-[11px] text-slate-400">${new Date(item.createdAt).toLocaleDateString('th-TH')}</span>
+            <div class="flex items-center gap-1">
+              <button title="แชร์ให้เพื่อน" class="card-share-btn p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+                <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+              </button>
+              <button title="ดาวน์โหลดลงเครื่อง" class="card-dl-btn p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 transition">
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+        `;
+
+        // Card Clicks
+        card.querySelector('.media-open-trigger').addEventListener('click', () => {
+          currentOpenedMedia = item;
+          openPreview(item.dataUrl, item.type, item.createdAt, false);
+        });
+        card.querySelector('.card-share-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          openShareModal(item);
+        });
+        card.querySelector('.card-dl-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          const a = document.createElement('a');
+          a.href = item.dataUrl;
+          a.download = `camvault-${Date.now()}.${isVideo ? 'webm' : 'jpg'}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          showToast("ดาวน์โหลดลงเครื่องแล้ว!", "success");
+        });
+
+        container.appendChild(card);
+      });
+      lucide.createIcons();
+    }
+
+    /* Render "Shared with Me" Grid */
+    function renderSharedGallery() {
+      const container = document.getElementById('sharedGrid');
+      const emptyState = document.getElementById('sharedEmpty');
+
+      container.innerHTML = '';
+      if (sharedMediaList.length === 0) {
+        emptyState.classList.remove('hidden');
+        emptyState.classList.add('flex');
+        return;
+      }
+      emptyState.classList.add('hidden');
+      emptyState.classList.remove('flex');
+
+      sharedMediaList.forEach(item => {
+        const card = document.createElement('div');
+        card.className = "group relative bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col hover:border-indigo-500/40 transition";
+        const isVideo = item.type === 'video';
+
+        card.innerHTML = `
+          <div class="relative w-full aspect-[4/3] bg-black overflow-hidden cursor-pointer media-open-trigger">
+            ${isVideo 
+              ? `<video src="${item.dataUrl}" class="w-full h-full object-cover"></video><div class="absolute inset-0 bg-black/30 flex items-center justify-center"><i data-lucide="play-circle" class="w-10 h-10 text-white/90"></i></div>`
+              : `<img src="${item.dataUrl}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">`
+            }
+            <div class="absolute top-2 left-2">
+              <span class="text-[10px] px-2 py-0.5 rounded bg-black/60 backdrop-blur-md text-white border border-white/10 uppercase font-medium">${isVideo ? 'วิดีโอ' : 'รูปภาพ'}</span>
+            </div>
+          </div>
+          <div class="p-3 flex items-center justify-between bg-slate-900/90 border-t border-slate-800/80">
+            <div class="truncate max-w-[140px]">
+              <span class="text-[10px] text-indigo-400 block truncate">จาก: ${item.ownerEmail}</span>
+              <span class="text-[10px] text-slate-500">${new Date(item.createdAt).toLocaleDateString('th-TH')}</span>
+            </div>
+            <button title="ดาวน์โหลดลงเครื่อง" class="card-dl-btn p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 transition">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        `;
+
+        card.querySelector('.media-open-trigger').addEventListener('click', () => {
+          currentOpenedMedia = item;
+          openPreview(item.dataUrl, item.type, item.createdAt, false);
+        });
+        card.querySelector('.card-dl-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          const a = document.createElement('a');
+          a.href = item.dataUrl;
+          a.download = `shared-${Date.now()}.${isVideo ? 'webm' : 'jpg'}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          showToast("ดาวน์โหลดลงเครื่องแล้ว!", "success");
+        });
+
+        container.appendChild(card);
+      });
+      lucide.createIcons();
+    }
+
+    document.getElementById('galleryFilterType').addEventListener('change', renderMyGallery);
+
+    /* Tab Switching Logic */
+    function switchTab(viewName) {
+      // Buttons
+      [tabCameraBtn, tabGalleryBtn, tabSharedBtn].forEach(b => {
+        b.className = "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-300 hover:text-white hover:bg-slate-700/50";
+      });
+      // Sections
+      cameraView.classList.add('hidden');
+      galleryView.classList.add('hidden');
+      sharedView.classList.add('hidden');
+
+      if (viewName === 'camera') {
+        tabCameraBtn.className = "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all bg-indigo-600 text-white shadow-sm";
+        cameraView.classList.remove('hidden');
+      } else if (viewName === 'gallery') {
+        tabGalleryBtn.className = "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all bg-indigo-600 text-white shadow-sm";
+        galleryView.classList.remove('hidden');
+        galleryView.classList.add('flex');
+        renderMyGallery();
+      } else if (viewName === 'shared') {
+        tabSharedBtn.className = "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all bg-indigo-600 text-white shadow-sm";
+        sharedView.classList.remove('hidden');
+        sharedView.classList.add('flex');
+        renderSharedGallery();
+      }
+    }
+
+    tabCameraBtn.addEventListener('click', () => switchTab('camera'));
+    tabGalleryBtn.addEventListener('click', () => switchTab('gallery'));
+    tabSharedBtn.addEventListener('click', () => switchTab('shared'));
+    document.getElementById('goToCameraFromGallery').addEventListener('click', () => switchTab('camera'));
+
+    /* Authentication Management */
+    authTriggerBtn.addEventListener('click', async () => {
+      if (currentUser) {
+        // Logout action
         try {
-          await deleteDoc(doc(db, "media_vault", id));
-          if (path) await deleteObject(ref(storage, path));
+          await signOut(auth);
+          showToast("ออกจากระบบเรียบร้อยแล้ว", "info");
         } catch (err) {
-          alert("ไม่สามารถลบได้: " + err.message);
+          console.error("Signout error:", err);
+        }
+      } else {
+        authModal.classList.remove('hidden');
+      }
+    });
+
+    openAuthModalBtn.addEventListener('click', () => authModal.classList.remove('hidden'));
+    closeAuthModalBtn.addEventListener('click', () => authModal.classList.add('hidden'));
+
+    authSwitchModeBtn.addEventListener('click', () => {
+      isRegisterMode = !isRegisterMode;
+      authModalTitle.textContent = isRegisterMode ? "ลงทะเบียนบัญชีใหม่" : "เข้าสู่ระบบ CamVault";
+      authSubmitBtn.querySelector('span').textContent = isRegisterMode ? "สมัครสมาชิกและเข้าใช้งาน" : "เข้าสู่ระบบ";
+      authSwitchPrompt.textContent = isRegisterMode ? "มีบัญชีอยู่แล้ว?" : "ยังไม่มีบัญชีใช่หรือไม่?";
+      authSwitchModeBtn.textContent = isRegisterMode ? "เข้าสู่ระบบเลย" : "ลงทะเบียนสร้างบัญชีใหม่";
+      authErrorMsg.classList.add('hidden');
+    });
+
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      authErrorMsg.classList.add('hidden');
+      const email = authEmail.value.trim();
+      const password = authPassword.value;
+
+      authSubmitBtn.disabled = true;
+      authSubmitBtn.innerHTML = `<span class="animate-spin mr-1">⌛</span> โปรดรอสักครู่...`;
+
+      try {
+        if (isRegisterMode) {
+          await createUserWithEmailAndPassword(auth, email, password);
+          showToast("สร้างบัญชีผู้ใช้งานใหม่สำเร็จ!", "success");
+        } else {
+          await signInWithEmailAndPassword(auth, email, password);
+          showToast("เข้าสู่ระบบเรียบร้อยแล้ว", "success");
+        }
+        authModal.classList.add('hidden');
+      } catch (err) {
+        authErrorMsg.textContent = `เกิดข้อผิดพลาด: ${err.message || 'โปรดตรวจสอบข้อมูลอีกครั้ง'}`;
+        authErrorMsg.classList.remove('hidden');
+      } finally {
+        authSubmitBtn.disabled = false;
+        authSubmitBtn.innerHTML = `<span>${isRegisterMode ? "สมัครสมาชิกและเข้าใช้งาน" : "เข้าสู่ระบบ"}</span>`;
+      }
+    });
+
+    /* Initialize Application Lifecycle */
+    async function initAuthAndApp() {
+      // RULE 3: Custom Token Priority, Auth before queries
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        try {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } catch (e) {
+          console.warn("Custom token sign in failed, fallback to state listener:", e);
         }
       }
 
-      if (action === "share") {
-        targetShareDocId = id;
-        shareModal.classList.remove("hidden");
-      }
-    });
+      onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        if (user) {
+          // Logged In
+          userDisplayName.textContent = user.email || 'ผู้ใช้งาน';
+          userInfoBlock.classList.remove('hidden');
+          authTriggerText.textContent = "ออกจากระบบ";
+          navTabs.classList.remove('hidden');
+          navTabs.classList.add('flex');
+          authGateNotice.classList.add('hidden');
+          cameraView.classList.remove('hidden');
 
-    // Share Modal Actions
-    document.getElementById("btnCloseShareModal").addEventListener("click", () => {
-      shareModal.classList.add("hidden");
-      shareTargetEmail.value = "";
-    });
+          // Subscribe to data
+          subscribeToMedia();
+        } else {
+          // Logged Out
+          userDisplayName.textContent = "";
+          userInfoBlock.classList.add('hidden');
+          authTriggerText.textContent = "เข้าสู่ระบบ";
+          navTabs.classList.add('hidden');
+          navTabs.classList.remove('flex');
+          if (myMediaUnsub) myMediaUnsub();
+          myMediaList = [];
+          sharedMediaList = [];
+          myMediaBadge.textContent = "0";
+          sharedBadge.textContent = "0";
+        }
+      });
 
-    document.getElementById("btnConfirmShare").addEventListener("click", async () => {
-      const email = shareTargetEmail.value.trim().toLowerCase();
-      if (!email) return alert("กรุณาระบุอีเมลผู้รับ");
-      if (email === currentUser.email.toLowerCase()) return alert("ไม่สามารถแชร์ให้อีเมลตัวเองได้");
+      // Start Camera Stream
+      await startCamera();
+      lucide.createIcons();
+    }
 
-      try {
-        await updateDoc(doc(db, "media_vault", targetShareDocId), {
-          sharedWith: arrayUnion(email)
-        });
-        alert(`แชร์ให้ ${email} เรียบร้อยแล้ว!`);
-        shareModal.classList.add("hidden");
-        shareTargetEmail.value = "";
-      } catch (err) {
-        alert("แชร์ไม่สำเร็จ: " + err.message);
-      }
+    // Run on load
+    window.addEventListener('DOMContentLoaded', () => {
+      initAuthAndApp();
     });
   </script>
 </body>
